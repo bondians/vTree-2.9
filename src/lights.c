@@ -13,12 +13,12 @@ void init_light_subsystem() {
     pinMode(B, 4, 1);
     pinMode(D, 5, 1);
     
-    // timer 0: "fast PWM", output set at TOP/cleared at OCR0x, clock/64 (977 Hz)
-    TCCR0A = 0xA3;
+    // timer 0: "fast PWM", output set at OCR0x/cleared at TOP, clock/64 (977 Hz)
+    TCCR0A = 0xF3;
     TCCR0B = 0x03;
     
-    // timer 1: "fast PWM, 8 bit", output set at TOP/cleared at OCR1x, clock/64 (977 Hz)
-    TCCR1A = 0xA1;
+    // timer 1: "fast PWM, 8 bit", output set at OCR1x/cleared at TOP, clock/64 (977 Hz)
+    TCCR1A = 0xF1;
     TCCR1B = 0x0B;
     
     OCR0A = 0x00;
