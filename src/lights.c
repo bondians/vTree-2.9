@@ -1,5 +1,4 @@
 #include "lights.h"
-#include "timing.h"
 
 #include <avr/io.h>
 #include <util/atomic.h>
@@ -10,50 +9,93 @@
 #define setPin(X, pin, mode)    setBit(PORT ## X, pin, mode)
 
 // channel set-points
-static volatile uint8_t chan_init = 0;
 static uint16_t chan_values[NUM_CHANNELS] = {};
 
-static void all_on() {
-    PORTD = (PORTD & 0xC7) | chan_init;
-}
+typedef struct {
+    uint16_t    when;
+    uint8_t     what;
+} frame_t;
 
-static event_t chan_on_event = {
-    when:   TIMING_OFFSET-1,
-    what:   &all_on,
-};
+static uint8_t frame = 0;
 
-static void ch0_off() {
-    setPin(D, 3, 0);
-}
+#define NUM_FRAMES 4
+static frame_t frames[NUM_FRAMES] = {};
+static uint8_t needs_update = 1;
 
-static void ch1_off() {
-    setPin(D, 4, 0);
-}
-
-static void ch2_off() {
-    setPin(D, 5, 0);
-}
-
-static event_t chan_off_events[3] = {
-    { when: 0, what: &ch0_off},
-    { when: 0, what: &ch1_off},
-    { when: 0, what: &ch2_off},
-};
-
-static void on_cycle_start();
-static event_t cycle_start = {
-    when: 0,
-    what: &on_cycle_start,
-};
-
-static void on_cycle_start() {
-    register_event(&cycle_start, 0);
+static void update_frames() {
+    uint8_t a,b,c;
     
-    register_event(&chan_on_event, 1);
-    for (int i = 0; i < 3; i++) {
-        chan_off_events[i].when = chan_values[i];
-        register_event(&chan_off_events[i], 1);
+    if (chan_values[0] < chan_values[1]) {
+        if (chan_values[1] < chan_values[2]) {
+            a = 0; b = 1, c = 2;
+        } else {
+            c = 1;
+            if (chan_values[0] < chan_values[2]) {
+                a = 0; b = 2;
+            } else {
+                a = 2; b = 0;
+            }
+        }
+    } else {
+        if (chan_values[1] < chan_values[2]) {
+            a = 1;
+            if (chan_values[0] < chan_values[2]) {
+                b = 0; c = 2;
+            } else {
+                b = 2; c = 0;
+            }
+        } else {
+            a = 2; b = 1; c = 0;
+        }
     }
+    
+    uint8_t x = 0x38;
+    frames[0].what = x;
+    
+    frames[1].when = chan_values[a];
+    x &= ~(1<<(3+a));
+    frames[1].what = x;
+    
+    frames[2].when = chan_values[b];
+    x &= ~(1<<(3+b));
+    frames[2].what = x;
+    
+    frames[3].when = chan_values[c];
+    x &= ~(1<<(3+c));
+    frames[3].what = x;
+    
+    for (int i = NUM_FRAMES-2; i >= 0; i--) {
+        if (frames[i].when == frames[i+1].when) {
+            frames[i].what = frames[i+1].what;
+        }
+    }
+}
+
+static void dispatch() {
+    while (frame < NUM_FRAMES) {
+        OCR1A = frames[frame].when;
+        
+        if (OCR1A > TCNT1+4) { // + a few to make sure there's time for the interrupt to fire again if necessary
+            break;
+        } else {
+            PORTD = (PORTD & 0xC7) | frames[frame].what;
+            frame++;
+        }
+    }
+    
+    if (needs_update) {
+        update_frames();
+        needs_update = 0;
+    }
+}
+
+ISR(TIMER1_COMPA_vect) {
+    dispatch();
+}
+
+ISR(TIMER1_OVF_vect) {
+    frame = 0;
+    dispatch();
 }
 
 void init_light_subsystem() {
@@ -62,17 +104,23 @@ void init_light_subsystem() {
     pinMode(D, 4, 1);
     pinMode(D, 5, 1);
     
-    // set up timer (pick timer and rate...)
-    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
-        register_event(&cycle_start, 0);
-    }
+    // set up timer
+    // start timer 1 in "normal mode" (16-bit) with no clock scaling and no output-compare
+    TCCR1A = 0x00;
+    TCCR1B = 0x01;
+    
+    // TODO: need to explicitly enable interrupts?
+    TIMSK = 0xC0;
+    sei();
 }
 
 void set_channel_value(uint8_t chan, uint16_t value) {
-    chan_values[chan] = (value >= MAX_LEVEL ? MAX_LEVEL : value) + TIMING_OFFSET + VALUE_OFFSET;
-    setBit(chan_init, chan + 3, value > VALUE_OFFSET);
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+        chan_values[chan] = value;
+        needs_update = 1;
+    }
 }
 
 uint16_t get_channel_value(uint8_t chan) {
-    return chan_values[chan] - TIMING_OFFSET;
+    return chan_values[chan];
 }
