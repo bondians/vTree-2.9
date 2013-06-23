@@ -14,7 +14,7 @@ static volatile uint8_t chan_init = 0;
 static uint16_t chan_values[NUM_CHANNELS] = {};
 
 static void all_on() {
-    PORTB = (PORTB & 0xE3) | chan_init;
+    PORTD = (PORTD & 0xC7) | chan_init;
 }
 
 static event_t chan_on_event = {
@@ -23,15 +23,15 @@ static event_t chan_on_event = {
 };
 
 static void ch0_off() {
-    setPin(B, 2, 0);
+    setPin(D, 3, 0);
 }
 
 static void ch1_off() {
-    setPin(B, 3, 0);
+    setPin(D, 4, 0);
 }
 
 static void ch2_off() {
-    setPin(B, 4, 0);
+    setPin(D, 5, 0);
 }
 
 static event_t chan_off_events[3] = {
@@ -58,9 +58,9 @@ static void on_cycle_start() {
 
 void init_light_subsystem() {
     // set data directions
-    pinMode(B, 2, 1);
-    pinMode(B, 3, 1);
-    pinMode(B, 4, 1);
+    pinMode(D, 3, 1);
+    pinMode(D, 4, 1);
+    pinMode(D, 5, 1);
     
     // set up timer (pick timer and rate...)
     ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
@@ -70,7 +70,7 @@ void init_light_subsystem() {
 
 void set_channel_value(uint8_t chan, uint16_t value) {
     chan_values[chan] = (value >= MAX_LEVEL ? MAX_LEVEL : value) + TIMING_OFFSET + VALUE_OFFSET;
-    setBit(chan_init, chan + 2, value > VALUE_OFFSET);
+    setBit(chan_init, chan + 3, value > VALUE_OFFSET);
 }
 
 uint16_t get_channel_value(uint8_t chan) {
