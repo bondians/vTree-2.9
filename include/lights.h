@@ -18,10 +18,14 @@
  *      if a timer is needed for other purposes.
  */
 
-#define NUM_CHANNELS 3
+#define NUM_CHANNELS    3
+
+#define TIMING_OFFSET   192
+#define VALUE_OFFSET    64
+#define MAX_LEVEL       (65535 - TIMING_OFFSET - VALUE_OFFSET)
 
 void init_light_subsystem();
-void set_channel_value(uint8_t chan, uint8_t value);
-uint8_t get_channel_value(uint8_t chan);
+void set_channel_value(uint8_t chan, uint16_t value);
+uint16_t get_channel_value(uint8_t chan);
 
 #endif /* ___n_lights_h__ */
