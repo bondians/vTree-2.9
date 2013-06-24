@@ -111,7 +111,6 @@ void init_light_subsystem() {
     
     // TODO: need to explicitly enable interrupts?
     TIMSK = 0xC0;
-    sei();
 }
 
 void set_channel_value(uint8_t chan, uint16_t value) {
