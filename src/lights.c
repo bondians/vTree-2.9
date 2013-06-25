@@ -18,51 +18,52 @@ typedef struct {
 
 static uint8_t frame = 0;
 
-#define NUM_FRAMES 4
+#define NUM_FRAMES (NUM_CHANNELS + 1)
 static frame_t frames[NUM_FRAMES] = {};
 static uint8_t needs_update = 1;
 
 static void update_frames() {
-    uint8_t a,b,c;
+    uint8_t order[3] = {0,1,2};
     
     if (chan_values[0] < chan_values[1]) {
         if (chan_values[1] < chan_values[2]) {
-            a = 0; b = 1, c = 2;
+            order[0] = 0; order[1] = 1, order[2] = 2;
         } else {
-            c = 1;
+            order[2] = 1;
             if (chan_values[0] < chan_values[2]) {
-                a = 0; b = 2;
+                order[0] = 0; order[1] = 2;
             } else {
-                a = 2; b = 0;
+                order[0] = 2; order[1] = 0;
             }
         }
     } else {
         if (chan_values[1] < chan_values[2]) {
-            a = 1;
+            order[0] = 1;
             if (chan_values[0] < chan_values[2]) {
-                b = 0; c = 2;
+                order[1] = 0; order[2] = 2;
             } else {
-                b = 2; c = 0;
+                order[1] = 2; order[2] = 0;
             }
         } else {
-            a = 2; b = 1; c = 0;
+            order[0] = 2; order[1] = 1; order[2] = 0;
         }
     }
     
-    uint8_t x = 0x38;
-    frames[0].what = x;
-    
-    frames[1].when = chan_values[a];
-    x &= ~(1<<(3+a));
-    frames[1].what = x;
-    
-    frames[2].when = chan_values[b];
-    x &= ~(1<<(3+b));
-    frames[2].what = x;
-    
-    frames[3].when = chan_values[c];
-    x &= ~(1<<(3+c));
+    uint8_t x = 0x00;
+
     frames[3].what = x;
+    frames[3].when = chan_values[order[2]];
+    
+    x |= (8<<order[2]);
+    frames[2].what = x;
+    frames[2].when = chan_values[order[1]];
+    
+    x |= (8<<order[1]);
+    frames[1].what = x;
+    frames[1].when = chan_values[order[0]];
+    
+    x |= (8<<order[0]);
+    frames[0].what = x;
     
     for (int i = NUM_FRAMES-2; i >= 0; i--) {
         if (frames[i].when == frames[i+1].when) {

@@ -1,6 +1,6 @@
 #include <avr/interrupt.h>
+#include <avr/sleep.h>
 #include <stdint.h>
-#include <util/delay.h>
 
 #include "dmx512.h"
 #include "lights.h"
@@ -12,6 +12,6 @@ int main(void)
     sei();
     
     while(1) {
-        _delay_ms(100);
+        sleep_mode();
     }
 }

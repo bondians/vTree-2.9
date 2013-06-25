@@ -8,7 +8,7 @@
 static volatile uint16_t address;
 static volatile uint8_t buf[BUF_SZ];
 
-enum {IDLE, BREAK, CHAN_DATA};
+enum {IDLE, CHAN_DATA, BREAK};
 static volatile uint8_t state = IDLE;
 static volatile int16_t offset;
 
