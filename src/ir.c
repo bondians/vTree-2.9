@@ -31,35 +31,67 @@ static uint8_t identify_code(uint32_t code, uint8_t no_match) {
     return (((a ^ b) == 0xFF) && !(b & 0x7)) ? b>>3 : no_match;
 }
 
+static inline uint8_t code_x(uint8_t code) {
+    uint8_t raw_x = (code >> 3) & 3;
+    switch(raw_x) {
+        default:
+        case 2: return 0;
+        case 0: return 1;
+        case 1: return 2;
+        case 3: return 3;
+    }
+}
+
+static inline uint8_t code_y(uint8_t code) {
+    uint8_t raw_y = code & 7;
+    switch(raw_y) {
+        default:
+        case 4: return 5;
+        case 2: return 0;
+        case 6: return 1;
+        case 5: return 2;
+        case 3: return 3;
+        case 1: return 4;
+    }
+}
+
 // a code was received; act upon it.  0xFF indicates the code was not recognized.
 static void accept(uint8_t code) {
-    switch (code) {
-        case 0x12: // Red button
-            set_channel_value(0, 0x0000);
-            set_channel_value(1, 0x0000);
-            set_channel_value(2, 0xFFFF);
+    uint8_t x = code_x(code);
+    uint8_t y = code_y(code);
+    
+    uint8_t a, t;
+    switch(y) {
+        case 5: // special buttons row
+            a = 0; t = 0;
             break;
-        case 0x02: // Green button
-            set_channel_value(0, 0x0000);
-            set_channel_value(1, 0xFFFF);
-            set_channel_value(2, 0x0000);
-            break;
-        case 0x0a: // Blue button
-            set_channel_value(0, 0xFFFF);
-            set_channel_value(1, 0x0000);
-            set_channel_value(2, 0x0000);
-            break;
-        case 0x1a: // White button
-            set_channel_value(0, 0xFFFF);
-            set_channel_value(1, 0xFFFF);
-            set_channel_value(2, 0xFFFF);
-            break;
-        default: // any other button
-            set_channel_value(0, 0x0000);
-            set_channel_value(1, 0x0000);
-            set_channel_value(2, 0x0000);
+        default:
+            a = y*51; t = 255;
             break;
     }
+    
+    uint8_t r,g,b;
+    switch(x) {
+        default:
+        case 0: // red->grn
+            r = t-a; g = a; b = 0;
+            break;
+        case 1: // grn->blu
+            r = 0; g = t-a; b = a;
+            break;
+        case 2: // blu->red
+            r = a; g = 0; b = t-a;
+            break;
+        case 3: // specials
+            if (y == 0) // white
+                r = g = b = 255;
+            else
+                r = g = b = 0;
+    }
+    
+    set_channel_value(0, b<<8);
+    set_channel_value(1, g<<8);
+    set_channel_value(2, r<<8);
 }
 
 // tokens we care about:
@@ -117,10 +149,13 @@ void parse(uint8_t token) {
                 case PARSE_BODY:
                     state = PARSE_DATA;
                     offset = 31;
-                    data = 0;
                     break;
                 case PARSE_DATA:
-                    // do nothing
+                    if (offset-- == 0) {
+                        accept(identify_code(data, 0xFF));
+                        
+                        state = PARSE_IDLE;
+                    }
                     break;
                 default:
                 case PARSE_RPT:
@@ -133,18 +168,9 @@ void parse(uint8_t token) {
         case ONE_SPACE:
         case ZERO_SPACE:
             if (state == PARSE_DATA) {
+                data <<= 1;
                 if (token == ONE_SPACE) {
-                    data |= 1L<<offset;
-                } else {
-                    data &= ~(1L<<offset);
-                }
-                
-                // TODO: should we do this during 'MARK' state to ensure last mark is the correct length?
-                // for that matter, what _is_ the correct length for the last mark?
-                if (offset-- == 0) {
-                    accept(identify_code(data, 0xFF));
-                    
-                    state = PARSE_IDLE;
+                    data |= 1L;
                 }
             }
             
