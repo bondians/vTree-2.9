@@ -55,35 +55,38 @@ static inline uint8_t code_y(uint8_t code) {
     }
 }
 
-// a code was received; act upon it.  0xFF indicates the code was not recognized.
+// a code was received; act upon it.
 static void accept(uint8_t code) {
-    uint8_t x = code_x(code);
-    uint8_t y = code_y(code);
+    code >>= 3;
     
-    uint8_t a, t;
-    switch(y) {
-        case 5: // special buttons row
-            a = 0; t = 0;
-            break;
+    uint8_t x, y;
+    switch(code & 0x7) {
+        // special buttons row
+        case 4: x =   0; y =   0; break;
+        
+        // color rows, in order
+        case 2: x =   0; y = 255; break;
+        case 6: x =  51; y = 204; break;
+        case 5: x = 102; y = 103; break;
+        case 3: x = 153; y = 102; break;
         default:
-            a = y*51; t = 255;
-            break;
+        case 1: x = 204; y =  51; break;
     }
     
     uint8_t r,g,b;
-    switch(x) {
+    switch((code >> 3) & 3) {
         default:
-        case 0: // red->grn
-            r = t-a; g = a; b = 0;
+        case 2: // red->grn
+            r = y; g = x; b = 0;
             break;
-        case 1: // grn->blu
-            r = 0; g = t-a; b = a;
+        case 0: // grn->blu
+            r = 0; g = y; b = x;
             break;
-        case 2: // blu->red
-            r = a; g = 0; b = t-a;
+        case 1: // blu->red
+            r = x; g = 0; b = y;
             break;
         case 3: // specials
-            if (y == 0) // white
+            if (code == 0x1a) // white
                 r = g = b = 255;
             else
                 r = g = b = 0;
@@ -96,9 +99,9 @@ static void accept(uint8_t code) {
 
 // tokens we care about:
 enum {
-    BIT_MARK, HDR_MARK,
     ZERO_SPACE, ONE_SPACE, RPT_SPACE, HDR_SPACE,
-    OTHER,
+    BIT_MARK, HDR_MARK,
+    OTHER = 0xff,
 };
 
 // recognize a token by its level and duration (in ticks)
@@ -125,10 +128,13 @@ static inline uint8_t identify_token(uint8_t state, uint16_t ticks) {
 // parser state.
 // TODO: separate states for each byte, check the parity as we go.
 // maybe check the device code too, so the result can be a single byte.
-enum {PARSE_IDLE, PARSE_HDR, PARSE_BODY, PARSE_RPT, PARSE_DATA};
+enum {PARSE_IDLE, PARSE_HDR, PARSE_BODY, PARSE_RPT, PARSE_DATA = 31};
 static volatile uint8_t state;
 static volatile uint8_t offset;
-static volatile uint32_t data;
+static volatile uint8_t data, data_hi;
+
+static const    uint8_t device_code  = 0x00;
+static volatile uint8_t command_code = 0xFF;
 
 // parser for NEC code sequences.  accepts 2 basic sequences:
 // repeat code: HDR_MARK RPT_SPACE BIT_MARK
@@ -151,8 +157,25 @@ void parse(uint8_t token) {
                     offset = 31;
                     break;
                 case PARSE_DATA:
+                    if (((offset == 24) && (data != (uint8_t)  device_code))
+                     || ((offset == 16) && (data != (uint8_t) ~device_code))) {
+                        state = PARSE_IDLE;
+                    }
+                    
+                    if (offset == 8) {
+                        // small space-saving shortcut;
+                        // will cause false acceptance of some invalid codes
+                        // but this should be exceptionally unlikely in practice.
+                        data_hi = data & 0xf8;
+                        // a correct alternative would be:
+                        // if (data & 7) { state = PARSE_IDLE; } else { data_hi = data; }
+                    }
+                    
                     if (offset-- == 0) {
-                        accept(identify_code(data, 0xFF));
+                        if (((data_hi ^ data) == 0xff)) {
+                            command_code = data_hi;
+                            accept(command_code);
+                        }
                         
                         state = PARSE_IDLE;
                     }
@@ -160,7 +183,8 @@ void parse(uint8_t token) {
                 default:
                 case PARSE_RPT:
                     // TODO: only process repeat shortly after seeing a normal code
-                    accept(identify_code(data, 0xFF));
+                    accept(command_code);
+                    
                     state = PARSE_IDLE;
                     break;
             }
@@ -170,7 +194,7 @@ void parse(uint8_t token) {
             if (state == PARSE_DATA) {
                 data <<= 1;
                 if (token == ONE_SPACE) {
-                    data |= 1L;
+                    data |= 1;
                 }
             }
             
@@ -203,36 +227,36 @@ ISR(TIMER0_COMPA_vect)
         default:
         case RCV_IDLE: // In the middle of a gap
             if (irdata) {
-                if (timer < GAP_TICKS) {
-                    // Not big enough to be a gap.
-                    timer = 0;
-                } else {
+                if (timer >= GAP_TICKS) {
                     // gap just ended, start recording transmission
-                    timer = 0;
                     rcv_state = RCV_MARK;
                 }
+                
+                timer = 0;
             }
             break;
         
         case RCV_MARK: // timing MARK
             if (!irdata) {   // MARK ended, record time
                 parse(identify_token(irdata, timer));
-                timer = 0;
                 rcv_state = RCV_SPACE;
+                
+                timer = 0;
             }
             break;
         
         case RCV_SPACE: // timing SPACE
             if (irdata) { // SPACE just ended, record it
                 parse(identify_token(irdata, timer));
-                timer = 0;
                 rcv_state = RCV_MARK;
-            } else { // SPACE
+                
+                timer = 0;
+            } else { // still in SPACE
                 if (timer > GAP_TICKS) {
-                // big SPACE, indicates gap between codes
-                // Don't reset timer; keep counting space width
-                rcv_state = RCV_IDLE;
-                } 
+                    // big SPACE, indicates gap between codes
+                    // Don't reset timer; keep counting space width
+                    rcv_state = RCV_IDLE;
+                }
             }
             break;
     }
