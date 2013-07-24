@@ -9,8 +9,8 @@
 int main(void)
 {
     init_light_subsystem();
-    init_dmx512_subsystem(6);
     init_ir_subsystem();
+    init_xbee_subsystem();
     sei();
     
     while(1) {
