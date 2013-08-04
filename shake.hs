@@ -10,7 +10,7 @@ buildDir        = "build"
 proj            = "vTree"
 
 device          = "attiny2313a"
-clock           = round 16e6
+clock           = round 8e6
 
 avrdudeFlags    = ["-c", "dragon_isp", "-p", "t2313"]
 usbPort         = "usb"

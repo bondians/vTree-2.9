@@ -265,7 +265,7 @@ ISR(TIMER0_COMPA_vect)
 void init_ir_subsystem() {
     // set up timer to give an interrupt every 50 usec (800 cycles @ 16MHz)
     // using CTC mode, clk/8, reset at 100
-    OCR0A = 100;
+    OCR0A = (uint8_t) (F_CPU * USECPERTICK / 8e6);
     TCCR0A = 0x02;
     TCCR0B = 0x02;
     
