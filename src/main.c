@@ -2,7 +2,7 @@
 #include <avr/sleep.h>
 #include <stdint.h>
 
-#include "dmx512.h"
+#include "xbee.h"
 #include "lights.h"
 #include "ir.h"
 
