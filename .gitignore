@@ -66,3 +66,4 @@ cabal-dev
 *.net
 *.cmd
 *.new.pcb
+#*.sch#
