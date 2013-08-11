@@ -57,3 +57,12 @@ cabal-dev
 .virthualenv
 
 
+########
+# gEDA #
+########
+
+*.bak*
+*.pcb-
+*.net
+*.cmd
+*.new.pcb
