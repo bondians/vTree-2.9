@@ -92,9 +92,9 @@ static void accept(uint8_t code) {
                 r = g = b = 0;
     }
     
-    set_channel_value(0, b<<8);
+    set_channel_value(0, r<<8);
     set_channel_value(1, g<<8);
-    set_channel_value(2, r<<8);
+    set_channel_value(2, b<<8);
 }
 
 // tokens we care about:
