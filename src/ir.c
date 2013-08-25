@@ -218,9 +218,9 @@ enum {RCV_IDLE, RCV_MARK, RCV_SPACE};
 static volatile uint8_t rcv_state   = RCV_IDLE;
 static volatile uint16_t timer      = 0; // ticks since start of current state
 
-ISR(TIMER0_COMPA_vect)
+ISR(TCC1_OVF_vect)
 {
-    uint8_t irdata = !(PIND & (1<<6));
+    uint8_t irdata = !(PORTA.IN & 0b00000001);
     
     timer++; // One more 50us tick
     switch(rcv_state) {
@@ -263,12 +263,22 @@ ISR(TIMER0_COMPA_vect)
 }
 
 void init_ir_subsystem() {
-    // set up timer to give an interrupt every 50 usec (800 cycles @ 16MHz)
-    // using CTC mode, clk/8, reset at 100
-    OCR0A = (uint8_t) (F_CPU * USECPERTICK / 8e6);
-    TCCR0A = 0x02;
-    TCCR0B = 0x02;
+    // Ensure IR pin is set as input
+    PORTA.DIRCLR = 0b00000001;
+    PORTE.DIRCLR = 0b1000;
+    //PORTE.PIN3CTRL = PORT_OPC_PULLUP_gc;
     
-    // enable TIMER0_COMPA interrupt
-    TIMSK |= 1 << OCIE0A;
+    // set up TCC1 to give an interrupt every 50 usec (1600 cycles @ 32MHz)
+    TCC1.CTRLB = TC_WGMODE_NORMAL_gc;
+    TCC1.CTRLC = 0;
+    TCC1.CTRLD = 0;
+    TCC1.CTRLE = 0;
+    
+    TCC1.PER = 1600;
+    
+    // enable TCC1_OVF_vect interrupt
+    TCC1.INTCTRLA = TC_OVFINTLVL_LO_gc;
+    
+    // start the timer
+    TCC1.CTRLA = TC_CLKSEL_DIV1_gc;
 }

@@ -9,10 +9,10 @@ srcDir          = "src"
 buildDir        = "build"
 proj            = "vTree"
 
-device          = "attiny2313a"
-clock           = round 8e6
+device          = "atxmega16a4u"
+clock           = round 32e6
 
-avrdudeFlags    = ["-c", "dragon_isp", "-p", "t2313"]
+avrdudeFlags    = ["-c", "dragon_pdi", "-p", device]
 usbPort         = "usb"
 
 cFlags = ["-Wall", "-Os", "-std=c99",
