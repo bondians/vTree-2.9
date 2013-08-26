@@ -31,12 +31,12 @@ static inline void reset_msg();
 static inline void recv_byte(uint8_t byte);
 static inline void accept_msg();
 
-ISR(USART_RX_vect) {
+ISR(USARTD0_RXC_vect) {
         // read status and byte immediately
-    uint8_t status  = UCSRA;
-    uint8_t in_byte = UDR;
+    uint8_t status  = USARTD0.STATUS;
+    uint8_t in_byte = USARTD0.DATA;
     
-    if (status & (1<<FE)) {
+    if (status & USART_FERR_bm) {
         // reset parser on frame errors
         reset_parser();
     } else {
@@ -219,11 +219,27 @@ static inline void accept_msg() {
 }
 
 void init_xbee_subsystem() {
-    #include <util/setbaud.h>
-    UBRRH = UBRRH_VALUE;
-    UBRRL = UBRRL_VALUE;
+    // TODO: something semi-automatic
+    #define BSEL    12
+    #define BSCALE  4
+    #define USE_2X  0
     
-    UCSRA = ((USE_2X ? 1 : 0) << U2X);
-    UCSRC = ((3<<UCSZ0) | (0<<UPM0) | (0<<USBS)); // 8N1
-    UCSRB |= (1 << RXCIE) | (1 << RXEN);    // enable RX and RX-complete interrupt
+    USARTD0.CTRLA = USART_RXCINTLVL_MED_gc;
+    USARTD0.CTRLB = USE_2X ? USART_CLK2X_bm : 0;
+    USARTD0.CTRLC = USART_CMODE_ASYNCHRONOUS_gc 
+                  | USART_PMODE_DISABLED_gc
+                  | USART_CHSIZE_8BIT_gc;
+    
+    USARTD0.BAUDCTRLA = BSEL;
+    USARTD0.BAUDCTRLB = (BSEL >> 8) | (BSCALE << 4);
+    
+    USARTD0.CTRLB |= USART_RXEN_bm;
+    
+    //#include <util/setbaud.h>
+    //UBRRH = UBRRH_VALUE;
+    //UBRRL = UBRRL_VALUE;
+    //
+    //UCSRA = ((USE_2X ? 1 : 0) << U2X);
+    //UCSRC = ((3<<UCSZ0) | (0<<UPM0) | (0<<USBS)); // 8N1
+    //UCSRB |= (1 << RXCIE) | (1 << RXEN);    // enable RX and RX-complete interrupt
 }

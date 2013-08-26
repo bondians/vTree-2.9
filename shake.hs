@@ -9,7 +9,7 @@ srcDir          = "src"
 buildDir        = "build"
 proj            = "vTree"
 
-device          = "atxmega16a4u"
+device          = "atxmega32a4u"
 clock           = round 32e6
 
 avrdudeFlags    = ["-c", "dragon_pdi", "-p", device]

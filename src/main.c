@@ -13,7 +13,7 @@ int main(void)
     
     init_light_subsystem();
     init_ir_subsystem();
-    //init_xbee_subsystem();
+    init_xbee_subsystem();
     
     // voodoo to make sure interrupts work...
     // TODO: figure out what it means.
