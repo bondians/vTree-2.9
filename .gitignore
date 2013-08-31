@@ -2,6 +2,7 @@
 build/
 vTree.bin
 vTree.hex
+*.zip
 
 #####
 # C #
