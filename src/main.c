@@ -3,9 +3,9 @@
 #include <stdint.h>
 
 #include "clock.h"
-//#include "xbee.h"
-#include "lights.h"
 #include "ir.h"
+#include "lights.h"
+#include "xbee.h"
 
 int main(void)
 {
