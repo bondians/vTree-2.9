@@ -1,3 +1,4 @@
+#include "debug.h"
 #include "ir.h"
 #include "lights.h"
 #include <stdint.h>
@@ -57,6 +58,8 @@ static inline uint8_t code_y(uint8_t code) {
 
 // a code was received; act upon it.
 static void accept(uint8_t code) {
+    dprintf("Received IR code: %d\r\n", code);
+    
     code >>= 3;
     
     uint8_t x, y;

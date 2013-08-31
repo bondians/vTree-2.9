@@ -1,6 +1,10 @@
 #include <avr/interrupt.h>
 #include <avr/sleep.h>
+#include <util/delay.h>
 #include <stdint.h>
+#include <stdio.h>
+
+#include "debug.h"
 
 #include "clock.h"
 #include "ir.h"
@@ -9,6 +13,8 @@
 
 int main(void)
 {
+    init_debug_subsystem();
+    
     setup_clock();
     
     init_light_subsystem();
@@ -20,6 +26,8 @@ int main(void)
     // interrupt flag)
     PMIC.CTRL = PMIC_LOLVLEN_bm | PMIC_MEDLVLEN_bm | PMIC_HILVLEN_bm;
     sei();
+    
+    dprintf("booted in debug mode\r\n");
     
     while(1) {
         sleep_mode();
