@@ -32,14 +32,9 @@ void linearize(
     if (ch1 > ch2) {swap(float,ch1,ch2); swap(volatile uint16_t *,ch1_loc,ch2_loc)}
     if (ch0 > ch1) {swap(float,ch0,ch1); swap(volatile uint16_t *,ch0_loc,ch1_loc)}
     
-    // the brightest channel's duty cycle is just the specified overall 
-    // intensity (other channels "steal" what they need from it)
-    //
     // TODO: think about normalization/gamut tradeoffs
-    //   one option is to divide by sqrt(3) here.
-    //   another is to clip channel values below.
-    //   another may be to change to using HSV natively.
-    float C = sqrtf(ch0 * ch0 + ch1 * ch1 + ch2 * ch2);
+    //  currently normalizing to preserve maximum channel value
+    float C = ch2; 
     
     // The others are simple linear combinations of that one.
     // This is a useful common factor.
