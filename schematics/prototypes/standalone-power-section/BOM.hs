@@ -69,11 +69,20 @@ gateLimResistor = basicPart mouser "ERJ-2GEJ151X"
     , (1000, 0.004)
     ]
 
-redVtgMatchResistor = basicPart mouser "PR02000201509JR500"
-    [ (1,    0.10)
-    , (100,  0.062)
-    , (500,  0.053)
-    , (1000, 0.049)
+redVtgMatchResistor = basicPart mouser "283-15-RC"
+    [ (1,      0.21)
+    , (100,    0.145)
+    , (1000,   0.09)
+    , (5000,   0.065)
+    , (10000,  0.055)
+    , (25000,  0.045)
+    , (50000,  0.037)
+    , (100000, 0.03)
+    , (250000, 0.027)
+    ] ++ basicPart mouser "MOS3CT631R150J"
+    [ (1,      0.20)
+    , (100,    0.153)
+    , (500,    0.128)
     ]
 
 gatePullDownResistor = basicPart mouser "ERJ-2GEJ104X"
