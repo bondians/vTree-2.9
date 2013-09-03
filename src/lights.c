@@ -1,6 +1,9 @@
 #include "lights.h"
+#include "linearize.h"
 
 #include <avr/io.h>
+
+static uint16_t channel_values[3] = {};
 
 void init_light_subsystem() {
     // Set OC0A/OC0B
@@ -23,25 +26,21 @@ void init_light_subsystem() {
 }
 
 void set_channel_value(uint8_t chan, uint16_t value) {
-    switch (chan) {
-        default:
-        case 0:
-            TCC0.CCABUF = value;
-            break;
-        case 1:
-            TCC0.CCBBUF = value;
-            break;
-        case 2:
-            TCC0.CCCBUF = value;
-            break;
-    }
+    channel_values[chan] = value;
+    
+    TCC0.CTRLFSET = TC0_LUPD_bm;
+    
+    TCC0.CCABUF = channel_values[0];
+    TCC0.CCBBUF = channel_values[1];
+    TCC0.CCCBUF = channel_values[2];
+    
+    linearize(
+        &TCC0.CCABUF,
+        &TCC0.CCBBUF,
+        &TCC0.CCCBUF);
+    TCC0.CTRLFCLR = TC0_LUPD_bm;
 }
 
 uint16_t get_channel_value(uint8_t chan) {
-    switch (chan) {
-        default:
-        case 0: return TCC0.CCA;
-        case 1: return TCC0.CCB;
-        case 2: return TCC0.CCC;
-    }
+    return channel_values[chan];
 }
