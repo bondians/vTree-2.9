@@ -212,8 +212,8 @@ static inline void recv_byte(uint8_t byte) {
 static inline void accept_msg() {
     if (msg_pos == 6) {
         uint16_t r = (incoming[0] << 8) | incoming[1];
-        uint16_t g = (incoming[4] << 8) | incoming[3];
-        uint16_t b = (incoming[6] << 8) | incoming[5];
+        uint16_t g = (incoming[2] << 8) | incoming[3];
+        uint16_t b = (incoming[4] << 8) | incoming[5];
         
         set_rgb(r, g, b);
     }
