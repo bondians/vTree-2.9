@@ -18,7 +18,7 @@ device=XbeePro
 T 55850 49300 5 10 1 1 0 6 1
 refdes=U3
 T 51900 45000 5 10 0 0 0 0 1
-footprint=Xbee
+footprint=XbeeTruncated
 }
 C 46500 43500 1 0 0 resistor-1.sym
 {
