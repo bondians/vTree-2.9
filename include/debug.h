@@ -1,7 +1,7 @@
 #ifndef ___n_debug_h__
 #define ___n_debug_h__
 
-#define DEBUG
+// #define DEBUG
 
 #ifdef DEBUG
 

@@ -219,9 +219,13 @@ enum {RCV_IDLE, RCV_MARK, RCV_SPACE};
 static volatile uint8_t rcv_state   = RCV_IDLE;
 static volatile uint16_t timer      = 0; // ticks since start of current state
 
-ISR(TCC1_OVF_vect)
+ISR(TCC5_OVF_vect)
 {
-    uint8_t irdata = !(PORTA.IN & 0b00000001);
+    // Read IR pin
+    uint8_t irdata = !(PORTC.IN & 0b1000);
+    
+    // Clear interrupt
+    TCC5.INTFLAGS = TC5_OVFIF_bm;
     
     timer++; // One more 50us tick
     switch(rcv_state) {
@@ -265,21 +269,19 @@ ISR(TCC1_OVF_vect)
 
 void init_ir_subsystem() {
     // Ensure IR pin is set as input
-    PORTA.DIRCLR = 0b00000001;
-    PORTE.DIRCLR = 0b1000;
-    //PORTE.PIN3CTRL = PORT_OPC_PULLUP_gc;
+    PORTC.DIRCLR = 0b1000;
     
-    // set up TCC1 to give an interrupt every 50 usec (1600 cycles @ 32MHz)
-    TCC1.CTRLB = TC_WGMODE_NORMAL_gc;
-    TCC1.CTRLC = 0;
-    TCC1.CTRLD = 0;
-    TCC1.CTRLE = 0;
+    // set up TCC5 to give an interrupt every 50 usec (1600 cycles @ 32MHz)
+    TCC5.CTRLB = 0b000 << TC5_WGMODE_gp;
+    TCC5.CTRLC = 0;
+    TCC5.CTRLD = 0;
+    TCC5.CTRLE = 0;
     
-    TCC1.PER = 1600;
+    TCC5.PER = 1600;
     
-    // enable TCC1_OVF_vect interrupt
-    TCC1.INTCTRLA = TC_OVFINTLVL_LO_gc;
+    // enable TCC5_OVF_vect interrupt at LOW priority
+    TCC5.INTCTRLA = 0b01 << TC5_OVFINTLVL_gp;
     
     // start the timer
-    TCC1.CTRLA = TC_CLKSEL_DIV1_gc;
+    TCC5.CTRLA = 0b0001 << TC5_CLKSEL_gp;
 }

@@ -10,33 +10,35 @@ void init_light_subsystem() {
     PORTC.DIRSET |= 0b00000111;
     
     // Set up 3-channel 16-bit dual-slope pwm on PORTC 0-2
-    TCC0.PER = 0xFFFF;
+    TCC4.PER = 0xFFFF;
     
-    TCC0.CTRLB = TC_WGMODE_DSBOTH_gc | TC0_CCAEN_bm | TC0_CCBEN_bm | TC0_CCCEN_bm;
-    TCC0.CTRLC = 0;
-    TCC0.CTRLD = 0;
-    TCC0.CTRLE = 0;
+    TCC4.CTRLB = 0b110 << TC4_WGMODE_gp;
+    TCC4.CTRLC = TC4_POLA_bm | TC4_POLB_bm | TC4_POLC_bm;
+    TCC4.CTRLD = 0;
+    TCC4.CTRLE = (0b01 << TC4_CCAMODE_gp)
+               | (0b01 << TC4_CCBMODE_gp)
+               | (0b01 << TC4_CCCMODE_gp);
     
-    TCC0.CCA = 0;
-    TCC0.CCB = 0;
-    TCC0.CCC = 0;
+    TCC4.CCA = 0;
+    TCC4.CCB = 0;
+    TCC4.CCC = 0;
     
     // start the timer
-    TCC0.CTRLA = TC_CLKSEL_DIV1_gc;
+    TCC4.CTRLA = 0b0001 << TC4_CLKSEL_gp;
 }
 
 static void apply() {
-    TCC0.CTRLFSET = TC0_LUPD_bm;
+    TCC4.CTRLGSET = TC4_LUPD_bm;
     
-    TCC0.CCABUF = channel_values[0];
-    TCC0.CCBBUF = channel_values[1];
-    TCC0.CCCBUF = channel_values[2];
+    TCC4.CCABUF = channel_values[0];
+    TCC4.CCBBUF = channel_values[1];
+    TCC4.CCCBUF = channel_values[2];
     
     linearize(
-        &TCC0.CCABUF,
-        &TCC0.CCBBUF,
-        &TCC0.CCCBUF);
-    TCC0.CTRLFCLR = TC0_LUPD_bm;
+        &TCC4.CCABUF,
+        &TCC4.CCBBUF,
+        &TCC4.CCCBUF);
+    TCC4.CTRLGCLR = TC4_LUPD_bm;
 }
 
 void set_rgb(uint16_t r, uint16_t g, uint16_t b) {
