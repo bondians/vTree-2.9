@@ -31,13 +31,13 @@ static void apply() {
     TCC4.CTRLGSET = TC4_LUPD_bm;
     
     TCC4.CCABUF = channel_values[0];
-    TCC4.CCBBUF = channel_values[1];
-    TCC4.CCCBUF = channel_values[2];
+    TCC4.CCCBUF = channel_values[1];
+    TCC4.CCBBUF = channel_values[2];
     
     linearize(
         &TCC4.CCABUF,
-        &TCC4.CCBBUF,
-        &TCC4.CCCBUF);
+        &TCC4.CCCBUF,
+        &TCC4.CCBBUF);
     TCC4.CTRLGCLR = TC4_LUPD_bm;
 }
 
