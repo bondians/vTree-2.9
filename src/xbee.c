@@ -31,10 +31,10 @@ static inline void reset_msg();
 static inline void recv_byte(uint8_t byte);
 static inline void accept_msg();
 
-ISR(USARTD0_RXC_vect) {
+ISR(USARTC0_RXC_vect) {
         // read status and byte immediately
-    uint8_t status  = USARTD0.STATUS;
-    uint8_t in_byte = USARTD0.DATA;
+    uint8_t status  = USARTC0.STATUS;
+    uint8_t in_byte = USARTC0.DATA;
     
     if (status & USART_FERR_bm) {
         // reset parser on frame errors
@@ -225,16 +225,18 @@ void init_xbee_subsystem() {
     #define BSCALE  4
     #define USE_2X  0
     
-    USARTD0.CTRLA = USART_RXCINTLVL_MED_gc;
-    USARTD0.CTRLB = USE_2X ? USART_CLK2X_bm : 0;
-    USARTD0.CTRLC = USART_CMODE_ASYNCHRONOUS_gc 
+    PORTC.REMAP |= PORT_USART0_bm;
+    
+    USARTC0.CTRLA = USART_RXCINTLVL_MED_gc;
+    USARTC0.CTRLB = USE_2X ? USART_CLK2X_bm : 0;
+    USARTC0.CTRLC = USART_CMODE_ASYNCHRONOUS_gc 
                   | USART_PMODE_DISABLED_gc
                   | USART_CHSIZE_8BIT_gc;
     
-    USARTD0.BAUDCTRLA = BSEL;
-    USARTD0.BAUDCTRLB = (BSEL >> 8) | (BSCALE << 4);
+    USARTC0.BAUDCTRLA = BSEL;
+    USARTC0.BAUDCTRLB = (BSEL >> 8) | (BSCALE << 4);
     
-    USARTD0.CTRLB |= USART_RXEN_bm;
+    USARTC0.CTRLB |= USART_RXEN_bm;
     
     //#include <util/setbaud.h>
     //UBRRH = UBRRH_VALUE;
