@@ -2,7 +2,7 @@
 
 #include <avr/io.h>
 
-#define USE_EXTERNAL_CLOCK
+// #define USE_EXTERNAL_CLOCK
 
 void setup_clock() {
 #ifdef USE_EXTERNAL_CLOCK
