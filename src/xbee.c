@@ -124,14 +124,8 @@ static inline void parse_byte(uint8_t byte) {
 
 // parser for frame payloads
 enum {
-    // parser relies on these being in this particular order:
-    API_RX_DATA = 0,
-    API_RX_OPTIONS, API_RX_RSSI,
-    API_RX_ADDR1, API_RX_ADDR2, API_RX_ADDR3, API_RX_ADDR4,
-    API_RX_ADDR5, API_RX_ADDR6, API_RX_ADDR7, API_RX_ADDR8,
-    
-    API_IDLE, API_STOP,
-    
+    // this type is mainly a countdown to skip data packet headers.
+    API_RX_DATA = 0, API_IDLE = 0xfe, API_STOP = 0xff,
 };
 
 uint8_t api_state;
@@ -144,13 +138,21 @@ static inline void reset_api_msg() {
 
 static inline void recv_api_byte(uint8_t byte) {
     switch (api_state) {
+        // byte received as part of body of message; pass to next parser
+        case API_RX_DATA:
+            recv_byte(byte);
+            break;
+        
         case API_IDLE:
             switch (byte) {
-                case 0x80: // RX msg with 64-bit source addr
-                    api_state = API_RX_ADDR8;
+                case 0x80: // s1 RX msg with 64-bit source addr; skip 10 bytes
+                    api_state = 10;
                     break;
-                case 0x81: // RX msg with 16-bit source addr
-                    api_state = API_RX_ADDR2;
+                case 0x81: // s1 RX msg with 16-bit source addr; skip 4 bytes
+                    api_state = 4;
+                    break;
+                case 0x90: // s2 RX msg; skip 11 bytes
+                    api_state = 11;
                     break;
                 default: // ignore any other msg
                     api_state = API_STOP;
@@ -158,27 +160,12 @@ static inline void recv_api_byte(uint8_t byte) {
             }
             break;
         
-        // ignore these fields
-        case API_RX_ADDR8:
-        case API_RX_ADDR7:
-        case API_RX_ADDR6:
-        case API_RX_ADDR5:
-        case API_RX_ADDR4:
-        case API_RX_ADDR3:
-        case API_RX_ADDR2:
-        case API_RX_ADDR1:
-        case API_RX_RSSI:
-        case API_RX_OPTIONS:
-            api_state--;
-            break;
-        
-        // byte received as part of body of message; pass to next parser
-        case API_RX_DATA:
-            recv_byte(byte);
-            break;
-        
-        default:
         case API_STOP:
+            break;
+        
+        // all other values are interpreted as a number of bytes to skip
+        default:
+            api_state--;
             break;
     }
 }
