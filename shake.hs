@@ -29,7 +29,7 @@ main = shakeArgs shakeOptions $ do
         removeFilesAfter "." ["*.hex", buildDir </> "*.o", buildDir </> "*.elf"]
     
     phony "flash" $ do
-        avrdude avrdudeFlags hex usbPort
+        avrdude "flash" avrdudeFlags hex usbPort
     
     buildDir </> "vTree.elf" *> \out -> do
         srcs <- getDirectoryFiles srcDir ["*.c"]
