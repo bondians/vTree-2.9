@@ -1,49 +1,74 @@
 #!/usr/bin/env runhaskell
 module Main where
 
+import Control.Monad
 import Development.Shake
 import Development.Shake.AVR
 import Development.Shake.FilePath
 
 srcDir          = "src"
-buildDir        = "build"
+buildRoot       = "build"
 proj            = "vTree"
 
-device          = "atxmega8e5"
-clock           = round 32e6
-
-avrdudeFlags    = ["-c", "dragon_pdi", "-p", device]
+avrdudeFlags    = ["-c", "dragon_pdi", "-p", "atxmega8e5"]
 usbPort         = "usb"
 
-cFlags = ["-Wall", "-Os", "-std=c99",
+cFlags board = ["-Wall", "-Os", "-std=c99",
     "-Iinclude",
-    "-DF_CPU=" ++ show clock ++ "UL",
-    "-mmcu=" ++ device]
+    "-DF_CPU=" ++ show (boardClock board) ++ "UL",
+    "-mmcu=" ++ boardDevice board]
+
+data Board = Board
+    { boardName     :: String
+    , boardDevice   :: String
+    , boardClock    :: Integer
+    }
+
+boards =
+    [ Board "teensy" "atmega32u4" (round 16e6)
+    , Board "xmega"  "atxmega8e5" (round 32e6)
+    ]
 
 main = shakeArgs shakeOptions $ do
-    let hex = proj <.> "hex"
-        bin = proj <.> "bin"
-    want [hex, bin]
+    want =<< mapM boardRules boards
     
     phony "clean" $ do
-        removeFilesAfter "." ["*.hex", buildDir </> "*.o", buildDir </> "*.elf"]
+        removeFilesAfter "." ["*.hex", "*.elf"]
+        sequence_
+            [ removeFilesAfter (buildRoot </> boardName board) ["*.o"]
+            | board <- boards
+            ]
     
-    phony "flash" $ do
-        avrdude "flash" avrdudeFlags hex usbPort
-    
-    buildDir </> "vTree.elf" *> \out -> do
-        srcs <- getDirectoryFiles srcDir ["*.c"]
-        let objs = [src `replaceDirectory` buildDir `replaceExtension` "o" | src <- srcs]
-        avr_ld' "avr-gcc" cFlags objs out
+    phony "flash" $ do -- only works for xmega
+        avrdude "flash" avrdudeFlags "vTree-xmega.hex" usbPort
     
     "*.hex" *> \out -> do
-        let elf = out `replaceDirectory` buildDir `replaceExtension` "elf"
+        let elf = out `replaceExtension` "elf"
         avr_objcopy "ihex" ["-j", ".text", "-j", ".data"] elf out
+
+boardRules board = do
+    let projBase = proj ++ "-" ++ boardName board
+        
+        boardDir        = srcDir </> "board" </> boardName board
+        buildDir        = buildRoot </> boardName board
+        boardBuildDir   = buildDir </> "board"
+        
+        hex = projBase <.> "hex"
+        elf = projBase <.> "elf"
     
-    "*.bin" *> \out -> do
-        let elf = out `replaceDirectory` buildDir `replaceExtension` "elf"
-        avr_objcopy "binary" ["-j", ".text", "-j", ".data"] elf out
+    elf *> \out -> do
+        srcs        <- getDirectoryFiles srcDir   ["*.c"]
+        boardSrcs   <- getDirectoryFiles boardDir ["*.c"]
+        let objs = [src `replaceDirectory` buildDir      `replaceExtension` "o" | src <- srcs]
+                ++ [src `replaceDirectory` boardBuildDir `replaceExtension` "o" | src <- boardSrcs]
+        avr_ld' "avr-gcc" (cFlags board) objs out
     
     buildDir </> "*.o" *> \out -> do
         let input = out `replaceDirectory` srcDir `replaceExtension` "c"
-        avr_gcc cFlags input out
+        avr_gcc (cFlags board) input out
+    
+    boardBuildDir </> "*.o" *> \out -> do
+        let input = out `replaceDirectory` boardDir `replaceExtension` "c"
+        avr_gcc (cFlags board) input out
+    
+    return hex

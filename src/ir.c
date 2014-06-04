@@ -2,8 +2,8 @@
 #include "ir.h"
 #include "lights.h"
 #include <stdint.h>
-#include <avr/interrupt.h>
-#include <avr/pgmspace.h>
+
+#include "board.h"
 
 // codes on my remote are CODE(0,x<<3), where 'x' is:
 // 
@@ -219,14 +219,7 @@ enum {RCV_IDLE, RCV_MARK, RCV_SPACE};
 static volatile uint8_t rcv_state   = RCV_IDLE;
 static volatile uint16_t timer      = 0; // ticks since start of current state
 
-ISR(TCC5_OVF_vect)
-{
-    // Read IR pin
-    uint8_t irdata = !(PORTC.IN & 0b1000);
-    
-    // Clear interrupt
-    TCC5.INTFLAGS = TC5_OVFIF_bm;
-    
+void receive_ir_data(bool irdata) {
     timer++; // One more 50us tick
     switch(rcv_state) {
         default:
@@ -265,23 +258,4 @@ ISR(TCC5_OVF_vect)
             }
             break;
     }
-}
-
-void init_ir_subsystem() {
-    // Ensure IR pin is set as input
-    PORTC.DIRCLR = 0b1000;
-    
-    // set up TCC5 to give an interrupt every 50 usec (1600 cycles @ 32MHz)
-    TCC5.CTRLB = 0b000 << TC5_WGMODE_gp;
-    TCC5.CTRLC = 0;
-    TCC5.CTRLD = 0;
-    TCC5.CTRLE = 0;
-    
-    TCC5.PER = 1600;
-    
-    // enable TCC5_OVF_vect interrupt at LOW priority
-    TCC5.INTCTRLA = 0b01 << TC5_OVFINTLVL_gp;
-    
-    // start the timer
-    TCC5.CTRLA = 0b0001 << TC5_CLKSEL_gp;
 }

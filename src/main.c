@@ -6,26 +6,13 @@
 
 #include "debug.h"
 
-#include "clock.h"
-#include "ir.h"
+#include "board.h"
 #include "lights.h"
-#include "xbee.h"
 
 int main(void)
 {
+    init_board();
     init_debug_subsystem();
-    
-    setup_clock();
-    
-    init_light_subsystem();
-    init_ir_subsystem();
-    init_xbee_subsystem();
-    
-    // Enable interrupts (first, the specific interrupt levels 
-    // we care about - that is, all of them - then the global
-    // interrupt flag)
-    PMIC.CTRL = PMIC_LOLVLEN_bm | PMIC_MEDLVLEN_bm | PMIC_HILVLEN_bm;
-    sei();
     
     dprintf("booted in debug mode\r\n");
     
