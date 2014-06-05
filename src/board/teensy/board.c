@@ -43,15 +43,24 @@ static void setup_clock() {
 // set up input to read IR sensor on PB4
 // and Timer0 to give an interrupt every 50 usec (800 cycles @ 16MHz)
 static void setup_ir_pin() {
+    // set IR pin to input
     DDRB &= ~(1 << DDB4);
     
-    OCR0A = 99;
+    // Timer0 configuration
+    const uint8_t COM = 0b00;   // no PWM
+    const uint8_t WGM = 0b010;  // CTC mode, TOP = OCR0A
+    const uint8_t CS  = 0b010;  // 1:8 with IO clock
+    const uint8_t TOP = 99;     // Frequency: 20 kHz (period: 50 usec)
     
-    // COM0A/B      = 00 (no PWM)
-    // WGM0         = 010 (CTC mode, TOP = OCR0A)
-    // CS           = 010 (1:8 with IO clock)
-    TCCR0A = 0b00000010;
-    TCCR0B = 0b00000010;
+    // apply configuration
+    OCR0A = TOP;
+    TCCR0A
+        = (COM              << COM0A0)
+        | (COM              << COM0B0)
+        | ((WGM & 0b0011)   << WGM00);
+    TCCR0B
+        = ((WGM >> 2)       << WGM02)
+        | (CS               << CS00);
     
     // enable compare-match interrupt
     TIMSK0 = 1 << OCIE0A;
@@ -60,15 +69,27 @@ static void setup_ir_pin() {
 // set up the light channels:
 // PORTB pins 5/6/7 (OCR1A/B/C)
 static void setup_light_pins() {
-    ICR1 = 0xFFFF;
-    OCR1A = OCR1B = OCR1C = 0;
+    // set initial values
+    OCR1A = OCR1B = OCR1C = 0xFFFF;
     
-    // COMA/B/C     = 10  ("normal view")
-    // WGM          = 1110 (fast PWM, TOP = ICR1, OCR update at TOP)
-    // CS           = 001 (1:1 with IO clock: 244 Hz PWM if clock is 16Mhz )
-    TCCR1A = 0b10101010;
-    TCCR1B = 0b00011001;
+    // PWM configuration
+    const uint8_t COM = 0b11;   // inverted
+    const uint8_t WGM = 0b1110; // fast PWM, TOP = ICR1, OCR update at TOP
+    const uint8_t CS  = 0b001;  // 1:1 with IO clock: 244 Hz PWM if clock is 16Mhz
+    const uint16_t TOP = 0xFFFF;
     
+    // apply configuration
+    ICR1 = TOP;
+    TCCR1A
+        = (COM              << COM1A0)
+        | (COM              << COM1B0)
+        | (COM              << COM1C0)
+        | ((WGM & 0b0011)   << WGM10);
+    TCCR1B
+        = ((WGM >> 2)       << WGM12)
+        | (CS               << CS10);
+    
+    // enable outputs
     DDRB |= (1 << DDB5)
           | (1 << DDB6)
           | (1 << DDB7);
