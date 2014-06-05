@@ -1,6 +1,7 @@
 #include <avr/interrupt.h>
 
 #include "ir.h"
+#include "xbee.h"
 
 ISR(TCC5_OVF_vect)
 {
@@ -30,7 +31,7 @@ ISR(USARTC0_RXC_vect) {
 
 // #define USE_EXTERNAL_CLOCK
 
-void setup_clock() {
+static void setup_clock() {
 #ifdef USE_EXTERNAL_CLOCK
     // Configure, enable, and wait for crystal
     OSC.XOSCCTRL = OSC_FRQRANGE_12TO16_gc | OSC_XOSCSEL_XTAL_16KCLK_gc;
@@ -54,7 +55,26 @@ void setup_clock() {
 #endif
 }
 
-void setup_light_pins() {
+static void setup_ir_pins() {
+    // Ensure IR pin is set as input
+    PORTC.DIRCLR = 0b1000;
+    
+    // set up TCC5 to give an interrupt every 50 usec (1600 cycles @ 32MHz)
+    TCC5.CTRLB = 0b000 << TC5_WGMODE_gp;
+    TCC5.CTRLC = 0;
+    TCC5.CTRLD = 0;
+    TCC5.CTRLE = 0;
+    
+    TCC5.PER = 1600;
+    
+    // enable TCC5_OVF_vect interrupt at LOW priority
+    TCC5.INTCTRLA = 0b01 << TC5_OVFINTLVL_gp;
+    
+    // start the timer
+    TCC5.CTRLA = 0b0001 << TC5_CLKSEL_gp;
+}
+
+static void setup_light_pins() {
     // Set OC0A/OC0B
     PORTC.DIRSET |= 0b00000111;
     
@@ -76,26 +96,7 @@ void setup_light_pins() {
     TCC4.CTRLA = 0b0001 << TC4_CLKSEL_gp;
 }
 
-void setup_ir_pins() {
-    // Ensure IR pin is set as input
-    PORTC.DIRCLR = 0b1000;
-    
-    // set up TCC5 to give an interrupt every 50 usec (1600 cycles @ 32MHz)
-    TCC5.CTRLB = 0b000 << TC5_WGMODE_gp;
-    TCC5.CTRLC = 0;
-    TCC5.CTRLD = 0;
-    TCC5.CTRLE = 0;
-    
-    TCC5.PER = 1600;
-    
-    // enable TCC5_OVF_vect interrupt at LOW priority
-    TCC5.INTCTRLA = 0b01 << TC5_OVFINTLVL_gp;
-    
-    // start the timer
-    TCC5.CTRLA = 0b0001 << TC5_CLKSEL_gp;
-}
-
-void setup_xbee_uart() {
+static void setup_xbee_uart() {
     // TODO: something semi-automatic
     #define BSEL    12
     #define BSCALE  4
@@ -113,14 +114,6 @@ void setup_xbee_uart() {
     USARTC0.BAUDCTRLB = (BSEL >> 8) | (BSCALE << 4);
     
     USARTC0.CTRLB |= USART_RXEN_bm;
-    
-    //#include <util/setbaud.h>
-    //UBRRH = UBRRH_VALUE;
-    //UBRRL = UBRRL_VALUE;
-    //
-    //UCSRA = ((USE_2X ? 1 : 0) << U2X);
-    //UCSRC = ((3<<UCSZ0) | (0<<UPM0) | (0<<USBS)); // 8N1
-    //UCSRB |= (1 << RXCIE) | (1 << RXEN);    // enable RX and RX-complete interrupt
 }
 
 void init_board(void) {
@@ -128,6 +121,7 @@ void init_board(void) {
     
     setup_ir_pins();
     setup_light_pins();
+    setup_xbee_uart();
     
     // Enable interrupts (first, the specific interrupt levels 
     // we care about - that is, all of them - then the global
