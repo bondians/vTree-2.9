@@ -46,6 +46,7 @@ boardRules board@Board{..} = do
     -- run avr_size on the elf, too, because I like to see where
     -- things stand.
     hex *> \out -> do
+        avr_size elf
         avr_objcopy "ihex" ["-j", ".text", "-j", ".data"] elf out
     
     -- to build the elf file, build an object file for every source file
