@@ -19,6 +19,8 @@ cFlags board = ["-Wall", "-Os", "-std=c99",
     "-DF_CPU=" ++ show (round (boardClock board) :: Integer) ++ "UL",
     "-mmcu=" ++ boardDevice board]
 
+ldFlags = ["-Wl,--gc-sections,--relax"]
+
 data Board = Board
     { boardName     :: String
     , boardDevice   :: String
@@ -55,7 +57,7 @@ boardRules board@Board{..} = do
         srcs        <- getDirectoryFiles srcDir   ["*.c"]
         boardSrcs   <- getDirectoryFiles boardDir ["*.c"]
         let objs = map (replaceDirAndExt buildDir "o") (srcs ++ boardSrcs)
-        avr_ld' "avr-gcc" (cFlags board) objs out
+        avr_ld' "avr-gcc" (cFlags board ++ ldFlags) objs out
     
     -- to build an object file, find the source (searching src/ first,
     -- then src/board/<board>/) and compile it.
