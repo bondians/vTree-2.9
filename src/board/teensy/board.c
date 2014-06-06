@@ -95,6 +95,14 @@ static void setup_light_pins() {
           | (1 << DDB7);
 }
 
+void apply_light_values(uint16_t r, uint16_t g, uint16_t b) {
+    linearize(&r, &g, &b);
+    
+    OCR1A = 0xFFFF - b;
+    OCR1B = 0xFFFF - g;
+    OCR1C = 0xFFFF - r;
+}
+
 // initialize USART1 to the selected baud rate.
 // RX on PD2, TX on PD3.
 static void setup_xbee_uart() {

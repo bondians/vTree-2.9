@@ -1,22 +1,16 @@
 #include "lights.h"
-#include "linearize.h"
+#include "board.h"
 
 #include <avr/io.h>
 
 static uint16_t channel_values[3] = {};
 
 static void apply() {
-    TCC4.CTRLGSET = TC4_LUPD_bm;
+    uint16_t r = channel_values[0],
+             g = channel_values[1],
+             b = channel_values[2];
     
-    TCC4.CCABUF = channel_values[0];
-    TCC4.CCCBUF = channel_values[1];
-    TCC4.CCBBUF = channel_values[2];
-    
-    linearize(
-        &TCC4.CCABUF,
-        &TCC4.CCCBUF,
-        &TCC4.CCBBUF);
-    TCC4.CTRLGCLR = TC4_LUPD_bm;
+    apply_light_values(r, g, b);
 }
 
 void set_rgb(uint16_t r, uint16_t g, uint16_t b) {

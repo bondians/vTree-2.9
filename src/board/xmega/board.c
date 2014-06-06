@@ -96,6 +96,20 @@ static void setup_light_pins() {
     TCC4.CTRLA = 0b0001 << TC4_CLKSEL_gp;
 }
 
+void apply_light_values(uint16_t r, uint16_t g, uint16_t b) {
+    TCC4.CTRLGSET = TC4_LUPD_bm;
+    
+    TCC4.CCABUF = r;
+    TCC4.CCCBUF = g;
+    TCC4.CCBBUF = b;
+    
+    linearize(
+        &TCC4.CCABUF,
+        &TCC4.CCCBUF,
+        &TCC4.CCBBUF);
+    TCC4.CTRLGCLR = TC4_LUPD_bm;
+}
+
 static void setup_xbee_uart() {
     // TODO: something semi-automatic
     #define BSEL    12
