@@ -1,6 +1,7 @@
 #include <avr/interrupt.h>
 
 #include "ir.h"
+#include "linearize.h"
 #include "xbee.h"
 
 ISR(TCC5_OVF_vect)
@@ -21,12 +22,7 @@ ISR(USARTC0_RXC_vect) {
     uint8_t status  = USARTC0.STATUS;
     uint8_t in_byte = USARTC0.DATA;
     
-    if (status & USART_FERR_bm) {
-        // reset parser on frame errors
-        xbee_reset_parser();
-    } else {
-        xbee_byte_received(in_byte);
-    }
+    xbee_byte_received(in_byte, status & USART_FERR_bm);
 }
 
 // #define USE_EXTERNAL_CLOCK

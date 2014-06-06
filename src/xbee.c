@@ -3,6 +3,7 @@
 
 #include <avr/io.h>
 #include <avr/interrupt.h>
+#include <pt.h>
 #include <stdbool.h>
 
 /*
@@ -17,6 +18,46 @@
         - short addrs (optional)
         - description strings (optional)
  */
+
+#define IN_BUF_SIZE 8
+
+static uint8_t in_buf[IN_BUF_SIZE];
+static uint8_t in_err[(IN_BUF_SIZE + 7) / 8];
+static uint8_t head = 0, count = 0;
+
+// receive a byte (and frame err flag) asynchronously,
+// record it so it can be handled outside the interrupt.
+void xbee_byte_received(uint8_t byte, bool err) {
+    if (count < IN_BUF_SIZE) {
+        uint8_t i = (head + count) % IN_BUF_SIZE;
+        
+        in_buf[i] = byte;
+        
+        uint8_t err_byte = i >> 3, err_bit = i & 0b111;
+        if (err) in_err[err_byte] |=   1 << err_bit;
+        else     in_err[err_byte] &= ~(1 << err_bit);
+    }
+    
+    count++;
+}
+
+// dequeue an input event recorded by xbee_byte_received
+static inline bool get_input_byte(uint8_t *byte, bool *err) {
+    if (count == 0) return false;
+    
+    cli();
+    *byte = in_buf[head];
+    *err  = in_err[head >> 3] & (1 << (head & 0b111));
+    
+    head = (head + 1) % IN_BUF_SIZE;
+    count--;
+    sei();
+    
+    return true;
+}
+
+static void reset_parser(void);
+static void parse_byte(uint8_t byte);
 
 static inline void reset_api_msg();
 static inline void recv_api_byte(uint8_t byte);
@@ -33,13 +74,28 @@ uint8_t rx_sz;
 bool rx_esc;
 uint8_t cksum;
 
+PT_THREAD(xbee_task(struct pt *pt)) {
+    uint8_t in_byte;
+    bool frame_err;
+    
+    PT_BEGIN(pt);
+    
+    while(1) {
+        PT_WAIT_UNTIL(pt, get_input_byte(&in_byte, &frame_err));
+        
+        if (frame_err) reset_parser();
+        else parse_byte(in_byte);
+    }
+    
+    PT_END(pt);
+}
 
-void xbee_reset_parser(void) {
+static void reset_parser(void) {
     rx_state = RX_IDLE;
     rx_esc = false;
 }
 
-void xbee_byte_received(uint8_t byte) {
+static void parse_byte(uint8_t byte) {
     switch (byte) {
         case 0x7e: // start frame
             cksum = 0;
@@ -96,7 +152,7 @@ void xbee_byte_received(uint8_t byte) {
                     if (cksum + byte == 0xFF) {
                         accept_api_msg();
                     }
-                    xbee_reset_parser();
+                    reset_parser();
                     break;
             }
             

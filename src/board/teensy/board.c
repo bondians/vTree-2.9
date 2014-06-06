@@ -1,6 +1,7 @@
 #include "board.h"
 
 #include "ir.h"
+#include "linearize.h"
 #include "xbee.h"
 
 #include <avr/io.h>
@@ -25,12 +26,7 @@ ISR(USART1_RX_vect) {
     uint8_t status  = UCSR1A;
     uint8_t in_byte = UDR1;
     
-    if (status & (1 << FE1)) {
-        // reset parser on frame errors
-        xbee_reset_parser();
-    } else {
-        xbee_byte_received(in_byte);
-    }
+    xbee_byte_received(in_byte, status & (1 << FE1));
 }
 
 // teensy starts up in CLKDIV8 mode (2 MHz).

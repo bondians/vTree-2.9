@@ -1,13 +1,14 @@
 #include <avr/interrupt.h>
 #include <avr/sleep.h>
-#include <util/delay.h>
+#include <pt.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <util/delay.h>
 
 #include "debug.h"
 
 #include "board.h"
-#include "lights.h"
+#include "xbee.h"
 
 int main(void)
 {
@@ -16,7 +17,12 @@ int main(void)
     
     dprintf("booted in debug mode\r\n");
     
+    struct pt xbee_pt;
+    PT_INIT(&xbee_pt);
+    
     while(1) {
+        xbee_task(&xbee_pt);
+        
         sleep_mode();
     }
 }
