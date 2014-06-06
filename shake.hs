@@ -73,7 +73,9 @@ boardRules board@Board{..} = do
     return hex
 
 main = shakeArgs shakeOptions $ do
-    "clean" ~> removeFilesAfter buildRoot ["//*"]
+    "clean" ~> do
+        removeFilesAfter "." ["vTree-*.hex"]
+        removeFilesAfter buildRoot ["//*"]
     
     -- note that "flash" only works for xmega
     -- (the teensy protocol isn't supported by avrdude)
