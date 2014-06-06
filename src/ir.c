@@ -5,57 +5,6 @@
 
 #include "board.h"
 
-// codes on my remote are CODE(0,x<<3), where 'x' is:
-// 
-//  0x14 0x04 0x0c 0x1c
-//  0x12 0x02 0x0a 0x1a
-//  0x16 0x06 0x0e 0x1e
-//  0x15 0x05 0x0d 0x1d
-//  0x13 0x03 0x0b 0x1b
-//  0x11 0x01 0x09 0x19
-//
-// and CODE(d,n), for 0 <= n < 32, is:
-#define CODE(d,n)   (  (uint32_t)(d)        << 24   \
-                    | ((uint32_t)(d)^0xFFL) << 16   \
-                    |  (uint32_t)(n)        << 8    \
-                    | ((uint32_t)(n)^0xFFL))
-
-// recognize a code from our particular remote.
-// 
-// requires that the 'device' portion be 0 and the other 
-// part be a multiple of 8.
-static uint8_t identify_code(uint32_t code, uint8_t no_match) {
-    if (code >> 16 != 0xFF) return no_match;
-    uint8_t a = code;
-    uint8_t b = code>>8;
-    
-    return (((a ^ b) == 0xFF) && !(b & 0x7)) ? b>>3 : no_match;
-}
-
-static inline uint8_t code_x(uint8_t code) {
-    uint8_t raw_x = (code >> 3) & 3;
-    switch(raw_x) {
-        default:
-        case 2: return 0;
-        case 0: return 1;
-        case 1: return 2;
-        case 3: return 3;
-    }
-}
-
-static inline uint8_t code_y(uint8_t code) {
-    uint8_t raw_y = code & 7;
-    switch(raw_y) {
-        default:
-        case 4: return 5;
-        case 2: return 0;
-        case 6: return 1;
-        case 5: return 2;
-        case 3: return 3;
-        case 1: return 4;
-    }
-}
-
 // a code was received; act upon it.
 static void accept(uint8_t code) {
     dprintf("Received IR code: %d\r\n", code);
@@ -106,7 +55,7 @@ enum {
 };
 
 // recognize a token by its level and duration (in ticks)
-static inline uint8_t identify_token(uint8_t state, uint16_t ticks) {
+static uint8_t identify_token(uint8_t state, uint16_t ticks) {
     if (!state) {
         if (ticks <   8) return OTHER;
         if (ticks <  15) return BIT_MARK; // 560 usec (11.2 ticks)
@@ -130,17 +79,18 @@ static inline uint8_t identify_token(uint8_t state, uint16_t ticks) {
 // TODO: separate states for each byte, check the parity as we go.
 // maybe check the device code too, so the result can be a single byte.
 enum {PARSE_IDLE, PARSE_HDR, PARSE_BODY, PARSE_RPT, PARSE_DATA = 31};
-static volatile uint8_t state;
-static volatile uint8_t offset;
-static volatile uint8_t data, data_hi;
-
-static const    uint8_t device_code  = 0x00;
-static volatile uint8_t command_code = 0xFF;
 
 // parser for NEC code sequences.  accepts 2 basic sequences:
 // repeat code: HDR_MARK RPT_SPACE BIT_MARK
 // data code:   HDR_MARK HDR_SPACE (BIT_MARK (ONE_SPACE|ZERO_SPACE)){32}
-void parse(uint8_t token) {
+static void parse(uint8_t token) {
+    static uint8_t state;
+    static uint8_t offset;
+    static uint8_t data, data_hi;
+
+    static const    uint8_t device_code  = 0x00;
+    static          uint8_t command_code = 0xFF;
+    
     switch(token) {
         case HDR_MARK:
             state = PARSE_HDR;
@@ -216,10 +166,11 @@ void parse(uint8_t token) {
 
 // receiver states
 enum {RCV_IDLE, RCV_MARK, RCV_SPACE};
-static volatile uint8_t rcv_state   = RCV_IDLE;
-static volatile uint16_t timer      = 0; // ticks since start of current state
 
 void receive_ir_data(bool irdata) {
+    static uint8_t rcv_state   = RCV_IDLE;
+    static uint16_t timer      = 0; // ticks since start of current state
+    
     timer++; // One more 50us tick
     switch(rcv_state) {
         default:
