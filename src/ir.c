@@ -13,9 +13,10 @@
 #define IDLE_TIMEOUT_USEC   5000    // Minimum gap between transmissions (microseconds)
 
 // a code was received; act upon it.
-static void accept(uint8_t code) {
-    dprintf("Received IR code: %d\r\n", code);
+static void accept(uint8_t device, uint8_t code) {
+    dprintf("Received IR code: %02x:%02x\r\n", device, code);
     
+    if (device != 0) return;
     if (code & 0b111) return;
     
     code >>= 3;
@@ -133,50 +134,48 @@ static bool get_input_token(token_t *token) {
 // parser for NEC code sequences.  accepts 2 basic sequences:
 // repeat code: HDR_MARK RPT_SPACE BIT_MARK
 // data code:   HDR_MARK HDR_SPACE (BIT_MARK (ONE_SPACE|ZERO_SPACE)){32}
+#define EXPECT_TOKEN(t) do {PT_WAIT_UNTIL(pt, get_input_token(&token)); if (token != t) goto top;} while (0)
 PT_THREAD(ir_task(struct pt *pt)) {
-    static uint8_t offset;
-    static uint8_t data, data_hi;
-
-    static const    uint8_t device_code  = 0x00;
-    static          uint8_t command_code = 0xFF;
-    
     static token_t token;
+    
+    static uint8_t bits_left;
+    static uint8_t data = 0x00;
+    static uint8_t device_code  = 0x00;
+    static uint8_t command_code = 0x00;
     
     PT_BEGIN(pt);
     
     while(1) {
-        PT_WAIT_UNTIL(pt, get_input_token(&token));
-        if (token != HDR_MARK) continue;
+        top:
+        EXPECT_TOKEN(HDR_MARK);
         
         PT_WAIT_UNTIL(pt, get_input_token(&token));
         if (token == RPT_SPACE) {
-            PT_WAIT_UNTIL(pt, get_input_token(&token));
-            if (token != BIT_MARK) continue;
-            
+            EXPECT_TOKEN(BIT_MARK);
             // TODO: only process repeat shortly after seeing a normal code
-            accept(command_code);
-        } else if (token == HDR_SPACE) {
-            for (offset = 0; offset < 32; offset++) {
-                if (offset == 8  && (data ^ device_code) != 0x00) break;
-                if (offset == 16 && (data ^ device_code) != 0xFF) break;
-                if (offset == 24) data_hi = data;
-                    
-                PT_WAIT_UNTIL(pt, get_input_token(&token));
-                if (token != BIT_MARK) break;
-                
-                PT_WAIT_UNTIL(pt, get_input_token(&token));
-                if (token != ZERO_SPACE && token != ONE_SPACE) break;
-                
-                data <<= 1;
-                if (token == ONE_SPACE) {
-                    data |= 1;
-                }
-            }
             
-            if (offset == 32 && (data ^ data_hi) == 0xFF) {
-                command_code = data_hi;
-                accept(command_code);
+            // continue to 'accept' section below
+        } else if (token == HDR_SPACE) {
+            bits_left = 32;
+            while (bits_left) {
+                EXPECT_TOKEN(BIT_MARK);
+                
+                PT_WAIT_UNTIL(pt, get_input_token(&token));
+                if (token != ZERO_SPACE && token != ONE_SPACE) goto top;
+                
+                data = (data << 1) | ((token == ONE_SPACE) ? 1 : 0);
+                
+                bits_left--;
+                if (bits_left == 24) device_code = data;
+                if (bits_left == 16 && (data ^ device_code) != 0xFF) goto top;
+                if (bits_left ==  8) command_code = data;
             }
+        } else {
+            goto top;
+        }
+        
+        if ((data ^ command_code) == 0xFF) {
+            accept(device_code, command_code);
         }
     }
     
