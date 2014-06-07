@@ -5,9 +5,15 @@
 
 #include "board.h"
 
+#define USEC_TO_TICKS(us)   ((uint32_t) us / IR_TICK_USEC)
+
+#define IDLE_TIMEOUT_USEC   5000    // Minimum gap between transmissions (microseconds)
+
 // a code was received; act upon it.
 static void accept(uint8_t code) {
     dprintf("Received IR code: %d\r\n", code);
+    
+    if (code & 0b111) return;
     
     code >>= 3;
     
@@ -55,24 +61,38 @@ enum {
 };
 
 // recognize a token by its level and duration (in ticks)
-static uint8_t identify_token(uint8_t state, uint16_t ticks) {
-    if (!state) {
-        if (ticks <   8) return OTHER;
-        if (ticks <  15) return BIT_MARK; // 560 usec (11.2 ticks)
-        if (ticks < 135) return OTHER;
-        if (ticks < 225) return HDR_MARK; // 9000 usec (180 ticks)
-        return OTHER;
-    } else {
-        if (ticks <   8) return OTHER;
-        if (ticks <  15) return ZERO_SPACE; // 560 usec (11.2 ticks)
-        if (ticks <  24) return OTHER;
-        if (ticks <  40) return ONE_SPACE; // 1600 usec (32 ticks)
-        if (ticks <  33) return OTHER;
-        if (ticks <  56) return RPT_SPACE; // 2250 usec (45 ticks)
-        if (ticks <  57) return OTHER;
-        if (ticks < 113) return HDR_SPACE; // 4500 usec (90 ticks)
-        return OTHER;
-    }
+#define LO_THRESHOLD_TICKS(us)      (USEC_TO_TICKS(3 * us) / 4)
+#define HI_THRESHOLD_TICKS(us)      (USEC_TO_TICKS(4 * us) / 3)
+static uint8_t identify_mark(uint16_t ticks) {
+    // 560 usec
+    if (ticks < LO_THRESHOLD_TICKS( 560)) return OTHER;
+    if (ticks < HI_THRESHOLD_TICKS( 560)) return BIT_MARK;
+    
+    // 9000 usec
+    if (ticks < LO_THRESHOLD_TICKS(9000)) return OTHER;
+    if (ticks < HI_THRESHOLD_TICKS(9000)) return HDR_MARK;
+    
+    return OTHER;
+}
+
+static uint8_t identify_space(uint16_t ticks) {
+    // 560 usec
+    if (ticks < LO_THRESHOLD_TICKS( 560)) return OTHER;
+    if (ticks < HI_THRESHOLD_TICKS( 560)) return ZERO_SPACE;
+    
+    // 1600 usec
+    if (ticks < LO_THRESHOLD_TICKS(1600)) return OTHER;
+    if (ticks < HI_THRESHOLD_TICKS(1600)) return ONE_SPACE;
+    
+    // 2250 usec
+    if (ticks < LO_THRESHOLD_TICKS(2250)) return OTHER;
+    if (ticks < HI_THRESHOLD_TICKS(2250)) return RPT_SPACE;
+    
+    // 4500 usec
+    if (ticks < LO_THRESHOLD_TICKS(4500)) return OTHER;
+    if (ticks < HI_THRESHOLD_TICKS(4500)) return HDR_SPACE;
+    
+    return OTHER;
 }
 
 // parser state.
@@ -114,21 +134,18 @@ static void parse(uint8_t token) {
                     }
                     
                     if (offset == 8) {
-                        // small space-saving shortcut;
-                        // will cause false acceptance of some invalid codes
-                        // but this should be exceptionally unlikely in practice.
-                        data_hi = data & 0xf8;
-                        // a correct alternative would be:
-                        // if (data & 7) { state = PARSE_IDLE; } else { data_hi = data; }
+                        data_hi = data;
                     }
                     
-                    if (offset-- == 0) {
+                    if (offset == 0) {
                         if (((data_hi ^ data) == 0xff)) {
                             command_code = data_hi;
                             accept(command_code);
                         }
                         
                         state = PARSE_IDLE;
+                    } else {
+                        offset--;
                     }
                     break;
                 default:
@@ -156,57 +173,43 @@ static void parse(uint8_t token) {
     }
 }
 
-// an extremely stripped-down version of the timer interrupt from
-// [https://github.com/shirriff/Arduino-IRremote] follows.
-
-#define USECPERTICK 50      // microseconds per clock interrupt tick
-
-#define _GAP        5000    // Minimum gap between transmissions (microseconds)
-#define GAP_TICKS (_GAP/USECPERTICK)
-
 // receiver states
 enum {RCV_IDLE, RCV_MARK, RCV_SPACE};
+static uint8_t rcv_state = RCV_IDLE;
 
-void receive_ir_data(bool irdata) {
-    static uint8_t rcv_state   = RCV_IDLE;
-    static uint16_t timer      = 0; // ticks since start of current state
-    
-    timer++; // One more 50us tick
+// A watchdog that switches the state to IDLE when
+// no pulse is received before the timer overflows.
+// 
+// This must be called if the tick counter overflows.
+void ir_pin_watchdog_timeout() {
+    rcv_state = RCV_IDLE;
+}
+
+// notification from the hardware that a pin change occurred
+// (either rising or falling edge).
+// 
+// must be called _only_ when the pin changes, and passed
+// the current carrier state (true = carrier detected) and
+// number of ticks since the last change.
+void ir_pin_changed(bool irdata, uint16_t time) {
     switch(rcv_state) {
-        default:
-        case RCV_IDLE: // In the middle of a gap
-            if (irdata) {
-                if (timer >= GAP_TICKS) {
-                    // gap just ended, start recording transmission
-                    rcv_state = RCV_MARK;
-                }
-                
-                timer = 0;
-            }
-            break;
-        
-        case RCV_MARK: // timing MARK
-            if (!irdata) {   // MARK ended, record time
-                parse(identify_token(irdata, timer));
-                rcv_state = RCV_SPACE;
-                
-                timer = 0;
-            }
-            break;
-        
-        case RCV_SPACE: // timing SPACE
-            if (irdata) { // SPACE just ended, record it
-                parse(identify_token(irdata, timer));
-                rcv_state = RCV_MARK;
-                
-                timer = 0;
-            } else { // still in SPACE
-                if (timer > GAP_TICKS) {
-                    // big SPACE, indicates gap between codes
-                    // Don't reset timer; keep counting space width
-                    rcv_state = RCV_IDLE;
-                }
-            }
-            break;
+    case RCV_IDLE:
+        if (irdata) {
+            // gap just ended, start recording transmission
+            rcv_state = RCV_MARK;
+        }
+        break;
+    
+    case RCV_SPACE:
+        parse(identify_space(time));
+        rcv_state = RCV_MARK;
+        break;
+    
+    default:
+    case RCV_MARK:
+        // MARK ended, record time
+        parse(identify_mark(time));
+        rcv_state = RCV_SPACE;
+        break;
     }
 }

@@ -14,10 +14,10 @@ proj            = "vTree"
 avrdudeFlags    = ["-c", "dragon_pdi", "-p", "atxmega8e5"]
 usbPort         = "usb"
 
-cFlags board = ["-Wall", "-Os", "-std=c99",
-    "-Iinclude", "-Ipt-1.4",
-    "-DF_CPU=" ++ show (round (boardClock board) :: Integer) ++ "UL",
-    "-mmcu=" ++ boardDevice board]
+cFlags Board{..} = ["-Wall", "-Os", "-std=c99",
+    "-Iinclude", "-Ipt-1.4", "-I" ++ srcDir </> "board" </> boardName,
+    "-DF_CPU=" ++ show (round boardClock :: Integer) ++ "UL",
+    "-mmcu=" ++ boardDevice]
 
 ldFlags = ["-Wl,--gc-sections,--relax"]
 

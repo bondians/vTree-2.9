@@ -7,12 +7,25 @@
 ISR(TCC5_OVF_vect)
 {
     // Read IR pin
-    uint8_t irdata = !(PORTC.IN & 0b1000);
+    uint8_t irdata = !(PORTC.IN & PIN4_bm);
     
     // Clear interrupt
     TCC5.INTFLAGS = TC5_OVFIF_bm;
     
-    receive_ir_data(irdata);
+    // TODO: switch to input-capture like teensy version
+    static uint16_t time       = 0;
+    static bool old_irdata     = false;
+    
+    time++; // One more 50us tick
+    if (time == 0xFFFF) {
+        ir_pin_watchdog_timeout();
+    }
+    
+    if (irdata != old_irdata) {
+        ir_pin_changed(irdata, time);
+        old_irdata = irdata;
+        time = 0;
+    }
 }
 
 #define BAUD 9600

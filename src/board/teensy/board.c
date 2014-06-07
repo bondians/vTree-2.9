@@ -7,16 +7,36 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
-ISR(TIMER0_COMPA_vect) {
-    bool irdata = !(PINB & (1 << PINB4));
+#define READ_IR_PIN             (!(PINC & (1 << PINC7)))
+
+#define ENABLE_STATUS_LED       do {DDRD |= 1 << DDD6;} while(0)
+#define SET_STATUS_LED(on)      do {PORTD = (PORTD & ~(1 << PIND6)) | ((on ? 1 : 0) << PIND6);} while(0)
+
+static bool rising_edge = false; // the edge being waited for
+ISR(TIMER3_CAPT_vect) {
+    bool     irdata     = !rising_edge;
+    uint16_t event_time = ICR3;
     
-    TIMSK0 = 1 << OCF0A;
+    // reset the timer
+    TCNT3 = 0;
     
-    PORTD = 
-        (PORTD & ~(1 << PIND6))
-        | ((irdata ? 1 : 0) << PIND6);
+    // switch the edge mode
+    rising_edge = !rising_edge;
+    TCCR3B = (TCCR3B & ~(1 << ICES3))
+           | ((rising_edge ? 1 : 0) << ICES3);
     
-    receive_ir_data(irdata);
+    // report the event
+    SET_STATUS_LED(irdata);
+    ir_pin_changed(irdata, event_time);
+    
+}
+
+ISR(TIMER3_COMPA_vect) {
+    ir_pin_watchdog_timeout();
+}
+
+ISR(TIMER3_OVF_vect) {
+    ir_pin_watchdog_timeout();
 }
 
 #define BAUD 9600
@@ -36,30 +56,39 @@ static void setup_clock() {
     CLKPR = 0b00000000; // execute the change
 }
 
-// set up input to read IR sensor on PB4
-// and Timer0 to give an interrupt every 50 usec (800 cycles @ 16MHz)
+// set up input to read IR sensor on PC7
+// and Timer3 to tick 64 usec, interrupt on pin change,
+// and interrupt twice during the cycle as well.
 static void setup_ir_pin() {
     // set IR pin to input
-    DDRB &= ~(1 << DDB4);
+    DDRC &= ~(1 << DDC7);
     
-    // Timer0 configuration
-    const uint8_t COM = 0b00;   // no PWM
-    const uint8_t WGM = 0b010;  // CTC mode, TOP = OCR0A
-    const uint8_t CS  = 0b010;  // 1:8 with IO clock
-    const uint8_t TOP = 99;     // Frequency: 20 kHz (period: 50 usec)
+    // Timer3 configuration
+    const uint8_t COM  = 0b00;   // no PWM
+    const uint8_t WGM  = 0b0000; // Normal mode
+    const uint8_t CS   = 0b101;  // 1:1024 with IO clock (15.625 kHz, period 64 µs)
+    const uint8_t ICNC = 0b1;    // input-capture noise canceler enabled
+    const uint8_t ICES = 0b0;    // initially looking for falling edge.
     
     // apply configuration
-    OCR0A = TOP;
-    TCCR0A
-        = (COM              << COM0A0)
-        | (COM              << COM0B0)
-        | ((WGM & 0b0011)   << WGM00);
-    TCCR0B
-        = ((WGM >> 2)       << WGM02)
-        | (CS               << CS00);
+    OCR3A = 0x8000;
+    TCCR3A
+        = (COM              << COM3A0)
+        | (COM              << COM3B0)
+        | (COM              << COM3C0)
+        | ((WGM & 0b0011)   << WGM30);
+    TCCR3B
+        = ((WGM >> 2)       << WGM32)
+        | (CS               << CS30)
+        | (ICES             << ICES3)
+        | (ICNC             << ICNC3);
+    rising_edge = ICES;
     
-    // enable compare-match interrupt
-    TIMSK0 = 1 << OCIE0A;
+    // enable interrupts
+    TIMSK3
+        = 1 << ICIE3
+        | 1 << TOIE3
+        | 1 << OCIE3A;
 }
 
 // set up the light channels:
@@ -125,7 +154,8 @@ void init_board(void) {
     setup_light_pins();
     setup_xbee_uart();
     
-    DDRD |= 1 << DDD6; // enable onboard LED output so we can blink it suggestively
+    // enable onboard LED output so we can blink it suggestively
+    ENABLE_STATUS_LED;
     
     sei();
 }
