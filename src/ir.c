@@ -99,85 +99,11 @@ static token_t identify_space(uint16_t ticks) {
     return OTHER;
 }
 
-// parser state.
-// TODO: separate states for each byte, check the parity as we go.
-// maybe check the device code too, so the result can be a single byte.
-enum {PARSE_IDLE, PARSE_HDR, PARSE_BODY, PARSE_RPT, PARSE_DATA = 31};
-
-// parser for NEC code sequences.  accepts 2 basic sequences:
-// repeat code: HDR_MARK RPT_SPACE BIT_MARK
-// data code:   HDR_MARK HDR_SPACE (BIT_MARK (ONE_SPACE|ZERO_SPACE)){32}
-static void parse(token_t token) {
-    static uint8_t state;
-    static uint8_t offset;
-    static uint8_t data, data_hi;
-
-    static const    uint8_t device_code  = 0x00;
-    static          uint8_t command_code = 0xFF;
-    
-    switch(token) {
-        case HDR_MARK:
-            state = PARSE_HDR;
-            break;
-        case HDR_SPACE:
-            state = (state == PARSE_HDR) ? PARSE_BODY : PARSE_IDLE;
-            break;
-        case RPT_SPACE:
-            state = (state == PARSE_HDR) ? PARSE_RPT : PARSE_IDLE;
-            break;
-        case BIT_MARK:
-            switch (state) {
-                case PARSE_BODY:
-                    state = PARSE_DATA;
-                    offset = 31;
-                    break;
-                case PARSE_DATA:
-                    if (((offset == 24) && (data != (uint8_t)  device_code))
-                     || ((offset == 16) && (data != (uint8_t) ~device_code))) {
-                        state = PARSE_IDLE;
-                    }
-                    
-                    if (offset == 8) {
-                        data_hi = data;
-                    }
-                    
-                    if (offset == 0) {
-                        if (((data_hi ^ data) == 0xff)) {
-                            command_code = data_hi;
-                            accept(command_code);
-                        }
-                        
-                        state = PARSE_IDLE;
-                    } else {
-                        offset--;
-                    }
-                    break;
-                default:
-                case PARSE_RPT:
-                    // TODO: only process repeat shortly after seeing a normal code
-                    accept(command_code);
-                    
-                    state = PARSE_IDLE;
-                    break;
-            }
-            break;
-        case ONE_SPACE:
-        case ZERO_SPACE:
-            if (state == PARSE_DATA) {
-                data <<= 1;
-                if (token == ONE_SPACE) {
-                    data |= 1;
-                }
-            }
-            
-            break;
-        default:
-            state = PARSE_IDLE;
-            break;
-    }
-}
-
-#define IN_TOKEN_COUNT      8
+// in practice we have no trouble at all keeping up 
+// with a "queue" of 1.  If we ever need it, though, 
+// this can be increased. (I've tested it with a deep
+// queue and lots of artificial latency)
+#define IN_TOKEN_COUNT      1
 static uint8_t incoming_tokens[IN_TOKEN_COUNT];
 static uint8_t head = 0, count = 0;
 
@@ -204,15 +130,54 @@ static bool get_input_token(token_t *token) {
     return true;
 }
 
+// parser for NEC code sequences.  accepts 2 basic sequences:
+// repeat code: HDR_MARK RPT_SPACE BIT_MARK
+// data code:   HDR_MARK HDR_SPACE (BIT_MARK (ONE_SPACE|ZERO_SPACE)){32}
 PT_THREAD(ir_task(struct pt *pt)) {
+    static uint8_t offset;
+    static uint8_t data, data_hi;
+
+    static const    uint8_t device_code  = 0x00;
+    static          uint8_t command_code = 0xFF;
+    
     static token_t token;
     
     PT_BEGIN(pt);
     
     while(1) {
         PT_WAIT_UNTIL(pt, get_input_token(&token));
+        if (token != HDR_MARK) continue;
         
-        parse(token);
+        PT_WAIT_UNTIL(pt, get_input_token(&token));
+        if (token == RPT_SPACE) {
+            PT_WAIT_UNTIL(pt, get_input_token(&token));
+            if (token != BIT_MARK) continue;
+            
+            // TODO: only process repeat shortly after seeing a normal code
+            accept(command_code);
+        } else if (token == HDR_SPACE) {
+            for (offset = 0; offset < 32; offset++) {
+                if (offset == 8  && (data ^ device_code) != 0x00) break;
+                if (offset == 16 && (data ^ device_code) != 0xFF) break;
+                if (offset == 24) data_hi = data;
+                    
+                PT_WAIT_UNTIL(pt, get_input_token(&token));
+                if (token != BIT_MARK) break;
+                
+                PT_WAIT_UNTIL(pt, get_input_token(&token));
+                if (token != ZERO_SPACE && token != ONE_SPACE) break;
+                
+                data <<= 1;
+                if (token == ONE_SPACE) {
+                    data |= 1;
+                }
+            }
+            
+            if (offset == 32 && (data ^ data_hi) == 0xFF) {
+                command_code = data_hi;
+                accept(command_code);
+            }
+        }
     }
     
     PT_END(pt);
