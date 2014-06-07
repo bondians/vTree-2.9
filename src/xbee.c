@@ -36,9 +36,9 @@ void xbee_byte_received(uint8_t byte, bool err) {
         uint8_t err_byte = i >> 3, err_bit = i & 0b111;
         if (err) in_err[err_byte] |=   1 << err_bit;
         else     in_err[err_byte] &= ~(1 << err_bit);
+        
+        count++;
     }
-    
-    count++;
 }
 
 // dequeue an input event recorded by xbee_byte_received

@@ -1,9 +1,12 @@
-#include "debug.h"
 #include "ir.h"
+
+#include "debug.h"
 #include "lights.h"
+#include "board.h"
+
+#include <avr/interrupt.h>
 #include <stdint.h>
 
-#include "board.h"
 
 #define USEC_TO_TICKS(us)   ((uint32_t) us / IR_TICK_USEC)
 
@@ -59,11 +62,12 @@ enum {
     BIT_MARK, HDR_MARK,
     OTHER = 0xff,
 };
+typedef uint8_t token_t;
 
 // recognize a token by its level and duration (in ticks)
 #define LO_THRESHOLD_TICKS(us)      (USEC_TO_TICKS(3 * us) / 4)
 #define HI_THRESHOLD_TICKS(us)      (USEC_TO_TICKS(4 * us) / 3)
-static uint8_t identify_mark(uint16_t ticks) {
+static token_t identify_mark(uint16_t ticks) {
     // 560 usec
     if (ticks < LO_THRESHOLD_TICKS( 560)) return OTHER;
     if (ticks < HI_THRESHOLD_TICKS( 560)) return BIT_MARK;
@@ -75,7 +79,7 @@ static uint8_t identify_mark(uint16_t ticks) {
     return OTHER;
 }
 
-static uint8_t identify_space(uint16_t ticks) {
+static token_t identify_space(uint16_t ticks) {
     // 560 usec
     if (ticks < LO_THRESHOLD_TICKS( 560)) return OTHER;
     if (ticks < HI_THRESHOLD_TICKS( 560)) return ZERO_SPACE;
@@ -103,7 +107,7 @@ enum {PARSE_IDLE, PARSE_HDR, PARSE_BODY, PARSE_RPT, PARSE_DATA = 31};
 // parser for NEC code sequences.  accepts 2 basic sequences:
 // repeat code: HDR_MARK RPT_SPACE BIT_MARK
 // data code:   HDR_MARK HDR_SPACE (BIT_MARK (ONE_SPACE|ZERO_SPACE)){32}
-static void parse(uint8_t token) {
+static void parse(token_t token) {
     static uint8_t state;
     static uint8_t offset;
     static uint8_t data, data_hi;
@@ -173,6 +177,47 @@ static void parse(uint8_t token) {
     }
 }
 
+#define IN_TOKEN_COUNT      8
+static uint8_t incoming_tokens[IN_TOKEN_COUNT];
+static uint8_t head = 0, count = 0;
+
+static void received_token(token_t token) {
+    if (count < IN_TOKEN_COUNT) {
+        uint8_t i = (head + count) % IN_TOKEN_COUNT;
+        
+        incoming_tokens[i] = token;
+        
+        count++;
+    }
+}
+
+static bool get_input_token(token_t *token) {
+    if (count == 0) return false;
+    
+    cli();
+    *token = incoming_tokens[head];
+    
+    head = (head + 1) % IN_TOKEN_COUNT;
+    count--;
+    sei();
+    
+    return true;
+}
+
+PT_THREAD(ir_task(struct pt *pt)) {
+    static token_t token;
+    
+    PT_BEGIN(pt);
+    
+    while(1) {
+        PT_WAIT_UNTIL(pt, get_input_token(&token));
+        
+        parse(token);
+    }
+    
+    PT_END(pt);
+}
+
 // receiver states
 enum {RCV_IDLE, RCV_MARK, RCV_SPACE};
 static uint8_t rcv_state = RCV_IDLE;
@@ -201,14 +246,14 @@ void ir_pin_changed(bool irdata, uint16_t time) {
         break;
     
     case RCV_SPACE:
-        parse(identify_space(time));
+        received_token(identify_space(time));
         rcv_state = RCV_MARK;
         break;
     
     default:
     case RCV_MARK:
         // MARK ended, record time
-        parse(identify_mark(time));
+        received_token(identify_mark(time));
         rcv_state = RCV_SPACE;
         break;
     }
