@@ -31,10 +31,6 @@ ISR(TIMER3_CAPT_vect) {
     
 }
 
-ISR(TIMER3_COMPA_vect) {
-    ir_pin_watchdog_timeout();
-}
-
 ISR(TIMER3_OVF_vect) {
     ir_pin_watchdog_timeout();
 }
@@ -71,7 +67,6 @@ static void setup_ir_pin() {
     const uint8_t ICES = 0b0;    // initially looking for falling edge.
     
     // apply configuration
-    OCR3A = 0x8000;
     TCCR3A
         = (COM              << COM3A0)
         | (COM              << COM3B0)
@@ -87,8 +82,7 @@ static void setup_ir_pin() {
     // enable interrupts
     TIMSK3
         = 1 << ICIE3
-        | 1 << TOIE3
-        | 1 << OCIE3A;
+        | 1 << TOIE3;
 }
 
 // set up the light channels:
