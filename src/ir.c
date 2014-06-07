@@ -134,7 +134,8 @@ static bool get_input_token(token_t *token) {
 // parser for NEC code sequences.  accepts 2 basic sequences:
 // repeat code: HDR_MARK RPT_SPACE BIT_MARK
 // data code:   HDR_MARK HDR_SPACE (BIT_MARK (ONE_SPACE|ZERO_SPACE)){32}
-#define EXPECT_TOKEN(t) do {PT_WAIT_UNTIL(pt, get_input_token(&token)); if (token != t) goto top;} while (0)
+#define GET_TOKEN(t)    do {PT_WAIT_UNTIL(pt, get_input_token(&token));} while (0)
+#define EXPECT_TOKEN(t) do {GET_TOKEN(token); if (token != t) goto top;} while (0)
 PT_THREAD(ir_task(struct pt *pt)) {
     static token_t token;
     
@@ -149,7 +150,7 @@ PT_THREAD(ir_task(struct pt *pt)) {
         top:
         EXPECT_TOKEN(HDR_MARK);
         
-        PT_WAIT_UNTIL(pt, get_input_token(&token));
+        GET_TOKEN(token);
         if (token == RPT_SPACE) {
             EXPECT_TOKEN(BIT_MARK);
             // TODO: only process repeat shortly after seeing a normal code
@@ -160,7 +161,7 @@ PT_THREAD(ir_task(struct pt *pt)) {
             while (bits_left) {
                 EXPECT_TOKEN(BIT_MARK);
                 
-                PT_WAIT_UNTIL(pt, get_input_token(&token));
+                GET_TOKEN(token);
                 if (token != ZERO_SPACE && token != ONE_SPACE) goto top;
                 
                 data = (data << 1) | ((token == ONE_SPACE) ? 1 : 0);
