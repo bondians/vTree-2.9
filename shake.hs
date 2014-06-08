@@ -3,11 +3,14 @@
 {-# LANGUAGE RecordWildCards #-}
 module Main where
 
+import Control.Monad
 import Development.Shake
 import Development.Shake.AVR
 import Development.Shake.FilePath
 
 srcDir          = "src"
+docDir          = "doc/html"
+doxyfile        = "Doxyfile"
 buildRoot       = "build"
 proj            = "vTree"
 
@@ -75,7 +78,19 @@ boardRules board@Board{..} = do
 main = shakeArgs shakeOptions $ do
     "clean" ~> do
         removeFilesAfter "." ["vTree-*.hex"]
-        removeFilesAfter buildRoot ["//*"]
+        
+        buildExists <- doesDirectoryExist buildRoot
+        when buildExists $ removeFilesAfter buildRoot ["//*"]
+        
+        docExists <- doesDirectoryExist docDir
+        when docExists $ removeFilesAfter docDir ["//*"]
+    
+    "doc" ~> need ["doc/html/index.html"]
+    "doc/html/index.html" *> \_ -> do
+        need [doxyfile]
+        need ["README.md"]
+        need . map (srcDir </>) =<< getDirectoryFiles srcDir ["//*.c"]
+        command_ [] "doxygen" [doxyfile]
     
     -- note that "flash" only works for xmega
     -- (the teensy protocol isn't supported by avrdude)
