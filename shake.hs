@@ -14,8 +14,7 @@ doxyfile        = "Doxyfile"
 buildRoot       = "build"
 proj            = "vTree"
 
-avrdudeFlags    = ["-c", "dragon_pdi", "-p", "atxmega8e5"]
-usbPort         = "usb"
+avrdudeFlags    = ["-c", "dragon_pdi"]
 
 cFlags Board{..} = ["-Wall", "-Os", "-std=c99",
     "-Iinclude", "-Ipt-1.4", "-I" ++ srcDir </> "board" </> boardName,
@@ -94,7 +93,7 @@ main = shakeArgs shakeOptions $ do
     
     -- note that "flash" only works for xmega
     -- (the teensy protocol isn't supported by avrdude)
-    "flash" ~> avrdude "flash" avrdudeFlags "vTree-xmega.hex" usbPort
+    "flash" ~> avrdude "atxmega8e5" avrdudeFlags (w Flash "vTree-xmega.hex")
     
     mapM_ boardRules
         [ Board "teensy" "atmega32u4" 16e6
